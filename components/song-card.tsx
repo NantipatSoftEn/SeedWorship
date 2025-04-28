@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit2, Calendar, Globe } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Badge } from "@/components/shadcn/badge"
 import { EditSongForm } from "@/components/edit-song-form"
@@ -10,7 +10,7 @@ import { ChordToggle } from "@/components/chord-toggle"
 import { FontSizeAdjuster } from "@/components/shadcn/font-size-adjuster"
 import { formatLyricsWithFormattedChords, getFontSizeClass } from "@/utils/format-lyrics"
 import { formatDate } from "@/utils/format-date"
-import type { Song, SongCategory, SongLanguage } from "@/types/song"
+import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import React from "react"
@@ -64,6 +64,21 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
     return languages[language] || "ไทย"
   }
 
+  const getTagLabel = (tag: SongTag): string => {
+    const tags: Record<SongTag, string> = {
+      slow: "เพลงช้า",
+      fast: "เพลงเร็ว",
+      medium: "เพลงปานกลาง",
+      acoustic: "อะคูสติก",
+      electronic: "อิเล็กทรอนิกส์",
+      hymn: "เพลงนมัสการดั้งเดิม",
+      contemporary: "เพลงนมัสการร่วมสมัย",
+      kids: "เพลงสำหรับเด็ก",
+      other: "อื่นๆ",
+    }
+    return tags[tag] || tag
+  }
+
   const getCategoryColor = (category: string): string => {
     const colors: Record<SongCategory, string> = {
       praise:
@@ -87,6 +102,21 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
       other: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
     }
     return colors[language] || "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+  }
+
+  const getTagColor = (tag: SongTag): string => {
+    const colors: Record<SongTag, string> = {
+      slow: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+      fast: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+      medium: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+      acoustic: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300",
+      electronic: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+      hymn: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
+      contemporary: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
+      kids: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
+      other: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+    }
+    return colors[tag] || "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
   }
 
   const getLyricPreview = (lyrics: string): string => {
@@ -239,7 +269,7 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
                 {highlightText(getLyricPreview(song.lyrics))}
               </p>
 
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <div className="flex items-center text-xs text-gray-500 dark:text-gray-500">
                   <Calendar className="h-3 w-3 mr-1" />
                   <span>{formattedDate}</span>
@@ -250,6 +280,18 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
                       <Globe className="h-2.5 w-2.5 mr-1" />
                       {getLanguageLabel(song.language)}
                     </Badge>
+                  </div>
+                )}
+
+                {/* แสดง tags */}
+                {song.tags && song.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {song.tags.map((tag) => (
+                      <Badge key={tag} className={cn("font-normal text-xs py-0 px-1.5", getTagColor(tag))}>
+                        <Tag className="h-2.5 w-2.5 mr-1" />
+                        {getTagLabel(tag)}
+                      </Badge>
+                    ))}
                   </div>
                 )}
               </div>

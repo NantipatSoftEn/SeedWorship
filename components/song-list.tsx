@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Search } from "lucide-react"
+import { Search, Tag } from "lucide-react"
 import { Input } from "@/components/shadcn/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
 import SongCard from "@/components/song-card"
@@ -16,18 +16,21 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/shadcn/pagination"
-import type { Song, SongLanguage } from "@/types/song"
+import { Badge } from "@/components/shadcn/badge"
+import type { Song, SongLanguage, SongTag } from "@/types/song"
 import { useAuth } from "@/hooks/use-auth"
 import { findSimilarStrings } from "@/utils/string-similarity"
+import { cn } from "@/lib/utils"
 
 const ITEMS_PER_PAGE = 10 // จำนวนเพลงต่อหน้า
 
 const SongList = (): JSX.Element => {
-  // เพิ่มภาษาให้กับข้อมูลตัวอย่าง
+  // เพิ่มภาษาและ tags ให้กับข้อมูลตัวอย่าง
   const initialSongs = mockSongs.map((song) => ({
     ...song,
     showChords: true,
     language: song.language || ((song.id % 3 === 0 ? "english" : "thai") as SongLanguage), // สุ่มภาษาถ้าไม่มีการกำหนด
+    tags: song.tags || getRandomTags(), // สุ่ม tags ถ้าไม่มีการกำหนด
     createdAt: song.createdAt || new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(), // สุ่มวันที่ย้อนหลังไม่เกิน 30 วัน
   }))
 
@@ -35,6 +38,7 @@ const SongList = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedLanguage, setSelectedLanguage] = useState<string>("all") // เพิ่มตัวกรองภาษา
+  const [selectedTag, setSelectedTag] = useState<string>("all") // เพิ่มตัวกรองตาม tag
   const [filteredSongs, setFilteredSongs] = useState<Song[]>(songs)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [paginatedSongs, setPaginatedSongs] = useState<Song[]>([])
@@ -93,7 +97,7 @@ const SongList = (): JSX.Element => {
     setSuggestions(similarStrings.slice(0, 5)) // แสดงเฉพาะ 5 คำแนะนำแรก
   }, [searchQuery, songs])
 
-  // Filter songs based on search query, selected category, and selected language
+  // Filter songs based on search query, selected category, selected language, and selected tag
   useEffect(() => {
     let result = songs
 
@@ -115,6 +119,11 @@ const SongList = (): JSX.Element => {
       result = result.filter((song) => song.language === selectedLanguage)
     }
 
+    // กรองตาม tag
+    if (selectedTag !== "all") {
+      result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
+    }
+
     // เรียงลำดับเพลงตามวันที่เพิ่ม (เพลงล่าสุดอยู่บนสุด)
     result = [...result].sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
@@ -124,7 +133,7 @@ const SongList = (): JSX.Element => {
 
     setFilteredSongs(result)
     setCurrentPage(1) // Reset to first page when filters change
-  }, [searchQuery, selectedCategory, selectedLanguage, songs])
+  }, [searchQuery, selectedCategory, selectedLanguage, selectedTag, songs])
 
   // Handle pagination
   useEffect(() => {
@@ -197,6 +206,58 @@ const SongList = (): JSX.Element => {
     }
   }, [])
 
+  // ตัวเลือกสำหรับ tags
+  const tagOptions = [
+    { label: "ทั้งหมด", value: "all" },
+    { label: "เพลงช้า", value: "slow", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300" },
+    { label: "เพลงเร็ว", value: "fast", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300" },
+    {
+      label: "เพลงปานกลาง",
+      value: "medium",
+      color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+    },
+    { label: "อะคูสติก", value: "acoustic", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300" },
+    {
+      label: "อิเล็กทรอนิกส์",
+      value: "electronic",
+      color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+    },
+    {
+      label: "เพลงนมัสการดั้งเดิม",
+      value: "hymn",
+      color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
+    },
+    {
+      label: "เพลงนมัสการร่วมสมัย",
+      value: "contemporary",
+      color: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
+    },
+    {
+      label: "เพลงสำหรับเด็ก",
+      value: "kids",
+      color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
+    },
+    { label: "อื่นๆ", value: "other", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" },
+  ]
+
+  // ฟังก์ชันสำหรับสุ่ม tags
+  function getRandomTags(): SongTag[] {
+    const allTags: SongTag[] = [
+      "slow",
+      "fast",
+      "medium",
+      "acoustic",
+      "electronic",
+      "hymn",
+      "contemporary",
+      "kids",
+      "other",
+    ]
+    const numTags = Math.floor(Math.random() * 3) + 1 // สุ่มจำนวน tags ระหว่าง 1-3
+    const shuffled = [...allTags].sort(() => 0.5 - Math.random())
+    return shuffled.slice(0, numTags) as SongTag[]
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
@@ -264,6 +325,30 @@ const SongList = (): JSX.Element => {
             />
           )}
         </div>
+      </div>
+
+      {/* เพิ่มตัวกรองตาม tags */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
+          <Tag className="h-4 w-4 mr-1" />
+          แท็ก:
+        </span>
+        {tagOptions.map((tag) => (
+          <Badge
+            key={tag.value}
+            className={cn(
+              "cursor-pointer",
+              selectedTag === tag.value
+                ? tag.value === "all"
+                  ? "bg-blue-600 text-white dark:bg-blue-700 dark:text-white"
+                  : tag.color
+                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
+            onClick={() => setSelectedTag(tag.value)}
+          >
+            {tag.label}
+          </Badge>
+        ))}
       </div>
 
       <div className="space-y-4">
@@ -354,6 +439,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องประสานเสียง",
     category: "praise",
     language: "thai",
+    tags: ["slow", "contemporary"],
     lyrics:
       "[G]พระเจ้าทรงเป็นความ[D]รัก\n[C]พระองค์ทรงรัก[G]เรา\n[G]พระเจ้าทรงเป็นความ[D]รัก\n[C]พระองค์ทรงรัก[G]เรา\n\n[Em]พระองค์ทรงส่งพระ[D]บุตร\n[C]มาสิ้นพระชนม์เพื่อ[G]เรา\n[Em]เพื่อเราจะได้มี[D]ชีวิต\n[C]ชีวิตนิรัน[G]ดร์",
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 วันที่แล้ว
@@ -364,6 +450,7 @@ const mockSongs: Song[] = [
     artist: "วงศ์วานวิหาร",
     category: "worship",
     language: "thai",
+    tags: ["slow", "hymn"],
     lyrics:
       "[G]พระคุณพระเจ้านั้นแสน[D]ชื่นใจ\n[C]ช่วยคนบาปอย่าง[G]ฉันได้รอด\n[Em]ฉันหลงทางพระองค์[D]ตามหา\n[C]ฉันตาบอดแต่เดี๋ยวนี้[G]เห็นแล้ว",
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 วันที่แล้ว
@@ -374,6 +461,7 @@ const mockSongs: Song[] = [
     artist: "คริสตจักรสัมพันธ์",
     category: "opening",
     language: "thai",
+    tags: ["medium", "contemporary"],
     lyrics:
       "[C]ขอบคุณพระเจ้า สำหรับความ[G]รักของพระองค์\n[F]ขอบคุณพระเจ้า สำหรับพระ[C]พรทุกอย่าง\n[C]ขอบคุณพระเจ้า สำหรับการ[G]ทรงนำ\n[F]ขอบคุณพระเจ้า สำหรับชีวิต[C]ใหม่",
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 วันที่แล้ว
@@ -385,6 +473,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องรวมใจ",
     category: "praise",
     language: "thai",
+    tags: ["fast", "contemporary"],
     lyrics:
       "[D]สรรเสริญ สรรเสริญ สรรเสริญพระ[A]เจ้า\n[G]สรรเสริญ สรรเสริญ พระผู้ช่วยให้[D]รอด\n[Bm]พระองค์ทรงยิ่งใหญ่ พระองค์ทรง[A]สมควร\n[G]ได้รับคำสรรเสริญ จากปวงชนทั้ง[D]หลาย",
     createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
@@ -395,6 +484,7 @@ const mockSongs: Song[] = [
     artist: "คริสตจักรพระพร",
     category: "worship",
     language: "thai",
+    tags: ["slow", "kids"],
     lyrics:
       "[G]พระเยซูรักฉัน พระ[D]คัมภีร์สอนไว้\n[C]เด็กเล็กๆ เป็นของพระ[G]องค์\n[Em]เด็กอ่อนแอ พระองค์ทรง[D]ฤทธิ์\n[C]พระองค์ทรงสถิตใน[G]สวรรค์",
     createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
@@ -405,6 +495,7 @@ const mockSongs: Song[] = [
     artist: "John Newton",
     category: "worship",
     language: "english",
+    tags: ["slow", "hymn"],
     lyrics:
       "[D]Amazing [G]grace! How [D]sweet the [A]sound\n[D]That saved a [G]wretch like [A]me!\n[D]I once was [G]lost, but [D]now am [A]found;\n[D]Was blind, but [G]now I [A]see.[D]",
     createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
@@ -415,6 +506,7 @@ const mockSongs: Song[] = [
     artist: "Stuart K. Hine",
     category: "praise",
     language: "english",
+    tags: ["medium", "hymn"],
     lyrics:
       "[G]O Lord my [C]God, when I in [G]awesome [D]wonder\n[G]Consider [C]all the [G]worlds Thy hands have [D]made\n[G]I see the [C]stars, I hear the [G]rolling [D]thunder\n[G]Thy power [D]throughout the [G]universe [C]displayed\n\n[G]Then sings my [D]soul, my [G]Savior God, to [C]Thee\n[G]How great Thou [D]art, how [G]great Thou [C]art\n[G]Then sings my [D]soul, my [G]Savior God, to [C]Thee\n[G]How great Thou [D]art, how [G]great Thou [C]art[G]",
     createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -425,6 +517,7 @@ const mockSongs: Song[] = [
     artist: "Joseph M. Scriven",
     category: "opening",
     language: "english",
+    tags: ["medium", "hymn"],
     lyrics:
       "[C]What a friend we [F]have in [C]Jesus,\n[C]All our sins and [G7]griefs to [C]bear!\n[C]What a privilege to [F]carry\n[C]Every[G7]thing to God in [C]prayer!",
     createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
@@ -435,6 +528,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องพระกิตติคุณ",
     category: "praise",
     language: "thai",
+    tags: ["fast", "contemporary"],
     lyrics: "[D]พระเยซูเป็นพระผู้[A]ช่วย\n[G]ทรงช่วยฉันให้[D]รอด\n[D]พระองค์ทรงสละ[A]ชีวิต\n[G]เพื่อไถ่บาปของ[D]ฉัน",
     createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -444,6 +538,7 @@ const mockSongs: Song[] = [
     artist: "คริสตจักรพระพร",
     category: "worship",
     language: "thai",
+    tags: ["slow", "acoustic"],
     lyrics: "[G]พระเจ้าทรงสถิตกับ[D]เรา\n[C]ทุกเวลาทุก[G]นาที\n[Em]ไม่ว่าเราจะอยู่[D]ที่ไหน\n[C]พระองค์ทรงอยู่[G]ที่นั่น",
     createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -453,6 +548,7 @@ const mockSongs: Song[] = [
     artist: "Maltbie D. Babcock",
     category: "praise",
     language: "english",
+    tags: ["medium", "hymn"],
     lyrics:
       "[G]This is my [C]Father's [G]world,\nAnd [G]to my [D]listening [G]ears\n[G]All [G]nature [C]sings, and [G]round me rings\nThe [D]music of the [G]spheres.",
     createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
@@ -463,6 +559,7 @@ const mockSongs: Song[] = [
     artist: "คริสตจักรชัยชนะ",
     category: "worship",
     language: "thai",
+    tags: ["fast", "contemporary"],
     lyrics: "[G]พระเยซูทรงชนะ[D]แล้ว\n[C]ชนะความตายและ[G]บาป\n[Em]พระองค์ทรงฟื้นคืน[D]พระชนม์\n[C]และประทับบนบัลลังก์[G]สวรรค์",
     createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -472,6 +569,7 @@ const mockSongs: Song[] = [
     artist: "Reginald Heber",
     category: "opening",
     language: "english",
+    tags: ["medium", "hymn"],
     lyrics:
       "[D]Holy, [A]holy, [D]holy! [G]Lord God Al[D]mighty!\n[A]Early in the [D]morning our [A]song shall [D]rise to Thee;\n[D]Holy, [A]holy, [D]holy, [G]merciful and [D]mighty!\n[G]God in three [D]Persons, [A]blessed [D]Trinity!",
     createdAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString(),
@@ -482,6 +580,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องรวมใจ",
     category: "praise",
     language: "thai",
+    tags: ["slow", "acoustic"],
     lyrics: "[D]พระเจ้าทรงเป็นผู้[A]เลี้ยง\n[G]ข้าพเจ้าจะไม่[D]ขัดสน\n[D]พระองค์ทรงให้ข้าพเจ้า[A]นอนลง\n[G]ที่ทุ่งหญ้าเขียว[D]สด",
     createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -491,6 +590,7 @@ const mockSongs: Song[] = [
     artist: "Thomas O. Chisholm",
     category: "worship",
     language: "english",
+    tags: ["medium", "hymn"],
     lyrics:
       "[D]Great is Thy [G]faithful[D]ness, O God my [A]Father;\n[D]There is no [G]shadow of [D]turning with [A]Thee;\n[D]Thou changest [G]not, Thy com[D]passions, they [G]fail [D]not;\n[G]As Thou hast [D]been, Thou for[A]ever will [D]be.",
     createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
@@ -501,6 +601,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องไทยนมัสการ",
     category: "opening",
     language: "thai",
+    tags: ["medium", "kids"],
     lyrics: "[C]พระเจ้าทรงสร้างฟ้า[G]สวรรค์\n[F]และแผ่นดิน[C]โลก\n[C]ทรงสร้างทุกสิ่งด้วย[G]พระวจนะ\n[F]และลมพระโอษฐ์ของ[C]พระองค์",
     createdAt: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -510,6 +611,7 @@ const mockSongs: Song[] = [
     artist: "Horatio G. Spafford",
     category: "praise",
     language: "english",
+    tags: ["slow", "hymn"],
     lyrics:
       "[D]When peace, like a [G]river, at[D]tendeth my [G]way,\n[D]When sorrows like [G]sea billows [A]roll;\n[D]Whatever my [G]lot, Thou hast [D]taught me to [G]say,\n[D]It is [A]well, it is [D]well with my [G]soul.[D]",
     createdAt: new Date(Date.now() - 17 * 24 * 60 * 60 * 1000).toISOString(),
@@ -520,6 +622,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องศิโยน",
     category: "worship",
     language: "thai",
+    tags: ["slow", "contemporary"],
     lyrics: "[G]พระเจ้าทรงเป็นความ[D]หวัง\n[C]ของข้าพเจ้าเสมอ[G]มา\n[Em]ในยามทุกข์และยาม[D]สุข\n[C]พระองค์ทรงอยู่[G]เคียงข้าง",
     createdAt: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -529,6 +632,7 @@ const mockSongs: Song[] = [
     artist: "Chris Tomlin",
     category: "opening",
     language: "english",
+    tags: ["medium", "contemporary"],
     lyrics:
       "[G]The splendor of the [Em]King, [C]clothed in majesty\n[G]Let all the earth [Em]rejoice, [C]all the earth rejoice\n[G]He wraps Himself in [Em]light, and [C]darkness tries to hide\n[G]And trembles at His [Em]voice, [C]trembles at His voice",
     createdAt: new Date(Date.now() - 19 * 24 * 60 * 60 * 1000).toISOString(),
@@ -539,6 +643,7 @@ const mockSongs: Song[] = [
     artist: "คณะนักร้องรวมใจ",
     category: "praise",
     language: "thai",
+    tags: ["fast", "electronic"],
     lyrics: "[D]พระเจ้าทรงเป็นความ[A]รอด\n[G]และเป็นกำลังของ[D]ข้าพเจ้า\n[D]พระองค์ทรงเป็นที่[A]พึ่ง\n[G]ในยามทุกข์[D]ยาก",
     createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
   },

@@ -11,13 +11,13 @@ import { Textarea } from "@/components/shadcn/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/shadcn/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/shadcn/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
-import { ChordHelper } from "@/components/shadcn/chord-helper"
 import { ChordExample } from "@/components/shadcn/chord-example"
 import { LyricsPreview } from "@/components/shadcn/lyrics-preview"
 import { ChordConverter } from "@/components/shadcn/chord-converter"
+import { TagSelector } from "@/components/shadcn/tag-selector"
 import { useToast } from "@/hooks/use-toast"
 import { autoConvertChordFormat } from "@/utils/chord-formatter"
-import type { Song } from "@/types/song"
+import type { Song, SongTag } from "@/types/song"
 
 // Define the form schema with validation
 const formSchema = z.object({
@@ -29,6 +29,7 @@ const formSchema = z.object({
   language: z.enum(["thai", "english", "other"], {
     required_error: "กรุณาเลือกภาษา",
   }),
+  tags: z.array(z.string()).optional(),
   lyrics: z.string().min(1, "กรุณาระบุเนื้อเพลง"),
 })
 
@@ -54,6 +55,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       artist: song.artist,
       category: song.category as "praise" | "worship" | "opening",
       language: song.language || "thai", // ใช้ค่าที่มีอยู่หรือค่าเริ่มต้นเป็นภาษาไทย
+      tags: song.tags || [], // ใช้ค่าที่มีอยู่หรือค่าเริ่มต้นเป็นอาร์เรย์ว่าง
       lyrics: song.lyrics,
     },
   })
@@ -77,6 +79,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
         artist: values.artist,
         category: values.category,
         language: values.language, // อัปเดตภาษา
+        tags: values.tags as SongTag[], // อัปเดต tags
         lyrics: formattedLyrics, // ใช้เนื้อเพลงที่แปลงรูปแบบคอร์ดแล้ว
         showChords: song.showChords ?? true, // รักษาค่าเดิม หรือตั้งค่าเริ่มต้นเป็น true
         createdAt: song.createdAt, // รักษาวันที่เพิ่มเพลงเดิมไว้
@@ -115,30 +118,10 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       artist: song.artist,
       category: song.category as "praise" | "worship" | "opening",
       language: song.language || "thai",
+      tags: song.tags || [],
       lyrics: song.lyrics,
     })
     onClose()
-  }
-
-  // ฟังก์ชันสำหรับแทรกคอร์ดลงในเนื้อเพลง
-  const insertChord = (chord: string): void => {
-    const textarea = lyricsTextareaRef.current
-    if (!textarea) return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const currentValue = form.getValues("lyrics")
-
-    // แทรกคอร์ดในรูปแบบ [คอร์ด]
-    const newValue = currentValue.substring(0, start) + `[${chord}]` + currentValue.substring(end)
-
-    form.setValue("lyrics", newValue, { shouldValidate: true, shouldDirty: true })
-
-    // ตั้งค่าตำแหน่งเคอร์เซอร์หลังจากแทรกคอร์ด
-    setTimeout(() => {
-      textarea.focus()
-      textarea.setSelectionRange(start + chord.length + 2, start + chord.length + 2)
-    }, 0)
   }
 
   // ฟังก์ชันสำหรับนำเนื้อเพลงที่แปลงรูปแบบคอร์ดแล้วมาใช้
@@ -148,6 +131,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
 
   const lyrics = form.watch("lyrics")
   const selectedLanguage = form.watch("language")
+  const selectedTags = form.watch("tags") || []
 
   return (
     <>
@@ -284,6 +268,20 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                 />
               </div>
 
+              {/* เปลี่ยนจาก MultiSelect เป็น TagSelector */}
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <TagSelector selectedTags={(field.value as SongTag[]) || []} onChange={field.onChange} />
+                    </FormControl>
+                    <FormMessage className="text-red-500 dark:text-red-400" />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="lyrics"
@@ -302,7 +300,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                           <FileText className="h-4 w-4 mr-1" />
                           แปลงรูปแบบคอร์ด
                         </Button>
-                        <ChordHelper onInsertChord={insertChord} />
+                        {/* ลบปุ่มเพิ่มคอร์ด (ChordHelper) ออก */}
                       </div>
                     </div>
                     <FormControl>
