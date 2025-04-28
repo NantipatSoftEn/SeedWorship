@@ -1,27 +1,31 @@
-import type React from "react"
 import type { Metadata } from "next"
+import { Sarabun } from "next/font/google"
 import "./globals.css"
-import { Toaster } from "@/components/ui/toaster"
+import { Toaster } from "@/components/shadcn/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Inter } from "next/font/google"
+import type React from "react"
 
-const inter = Inter({ subsets: ["latin"] })
+const sarabun = Sarabun({
+  subsets: ["latin", "thai"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+})
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.dev",
+  title: "SeedTrack - รายการเพลง",
+  description: "แอปพลิเคชันสำหรับจัดการรายการเพลง",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
-}) {
+}): JSX.Element {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <html lang="th" suppressHydrationWarning>
+      <body className={sarabun.className}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
           <Toaster />
         </ThemeProvider>
