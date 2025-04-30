@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { Sarabun } from "next/font/google"
 import "./globals.css"
-import { Toaster } from "@/components/shadcn/toaster"
+import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SupabaseAuthProvider } from "@/components/providers/supabase-auth-provider"
 import type { ReactNode } from "react"

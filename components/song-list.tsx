@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Search, Filter, SlidersHorizontal, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
-import { Input } from "@/components/shadcn/input"
-import { Badge } from "@/components/shadcn/badge"
-import { Button } from "@/components/shadcn/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MultiSelect } from "@/components/shadcn/multi-select"
 import {
   Pagination,
@@ -15,16 +16,13 @@ import {
   PaginationNext,
   PaginationPrevious,
   PaginationEllipsis,
-} from "@/components/shadcn/pagination"
-import { Collapsible, CollapsibleContent } from "@/components/shadcn/collapsible"
+} from "@/components/ui/pagination"
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { SearchSuggestions } from "@/components/search-suggestions"
 import { SongListSkeleton } from "@/components/skeletons/song-list-skeleton"
 import { AddSongButton } from "@/components/add-song-button"
 import SongCard from "@/components/song-card"
 import { useToast } from "@/hooks/use-toast"
-import { getSongs, toggleFavorite, toggleShowChords } from "@/lib/actions/song-actions"
-import { findSimilarStrings } from "@/utils/string-similarity"
-import { useAuth } from "@/components/providers/supabase-auth-provider"
 import type { Song, SongTag } from "@/types/song"
 
 const ITEMS_PER_PAGE = 10 // จำนวนเพลงต่อหน้า
@@ -36,7 +34,7 @@ const categories = [
   { label: "บทเพลงเปิด", value: "opening" },
 ]
 
-const SongList = (): JSX.Element => {
+export default function SongList() {
   const [songs, setSongs] = useState<Song[]>([])
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -50,7 +48,7 @@ const SongList = (): JSX.Element => {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const { user } = useAuth()
+  const supabase = createClientComponentClient()
 
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState<boolean>(false)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -62,8 +60,45 @@ const SongList = (): JSX.Element => {
   const fetchSongs = async () => {
     try {
       setIsLoading(true)
-      const data = await getSongs()
-      setSongs(data)
+
+      // ดึงข้อมูลผู้ใช้ปัจจุบัน
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      // ดึงข้อมูลเพลงทั้งหมด
+      const { data: songsData, error } = await supabase
+        .from("songs")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+
+      // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
+      let favorites: Record<string, boolean> = {}
+
+      if (user) {
+        const { data: favoritesData } = await supabase.from("favorites").select("song_id").eq("user_id", user.id)
+
+        if (favoritesData) {
+          favorites = favoritesData.reduce(
+            (acc, fav) => {
+              acc[fav.song_id] = true
+              return acc
+            },
+            {} as Record<string, boolean>,
+          )
+        }
+      }
+
+      // เพิ่มข้อมูล is_favorite ให้กับเพลง
+      const songsWithFavorites =
+        songsData?.map((song) => ({
+          ...song,
+          is_favorite: favorites[song.id] || false,
+        })) || []
+
+      setSongs(songsWithFavorites)
     } catch (error) {
       console.error("Error fetching songs:", error)
       toast({
@@ -81,36 +116,48 @@ const SongList = (): JSX.Element => {
   }, [])
 
   // Function to update a song
-  const updateSong = (updatedSong: Song): void => {
+  const updateSong = (updatedSong: Song) => {
     setSongs((prevSongs) => prevSongs.map((song) => (song.id === updatedSong.id ? updatedSong : song)))
   }
 
   // Function to add a new song
-  const addSong = (newSong: Song): void => {
+  const addSong = (newSong: Song) => {
     setSongs((prevSongs) => [newSong, ...prevSongs])
   }
 
   // Function to delete a song
-  const deleteSong = (songId: string): void => {
-    setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
+  const deleteSong = async (songId: string) => {
+    try {
+      const { error } = await supabase.from("songs").delete().eq("id", songId)
+
+      if (error) throw error
+
+      setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
+
+      toast({
+        title: "ลบเพลงสำเร็จ",
+        description: "ลบเพลงเรียบร้อยแล้ว",
+      })
+    } catch (error) {
+      console.error("Error deleting song:", error)
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถลบเพลงได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive",
+      })
+    }
   }
 
   // Function to toggle chord visibility
-  const handleToggleChords = async (songId: string, showChords: boolean): Promise<void> => {
+  const handleToggleChords = async (songId: string, showChords: boolean) => {
     try {
-      const result = await toggleShowChords(songId, showChords)
+      const { error } = await supabase.from("songs").update({ show_chords: showChords }).eq("id", songId)
 
-      if (result.success) {
-        setSongs((prevSongs) =>
-          prevSongs.map((song) => (song.id === songId ? { ...song, show_chords: showChords } : song)),
-        )
-      } else {
-        toast({
-          title: "เกิดข้อผิดพลาด",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
+      if (error) throw error
+
+      setSongs((prevSongs) =>
+        prevSongs.map((song) => (song.id === songId ? { ...song, show_chords: showChords } : song)),
+      )
     } catch (error) {
       console.error("Error toggling chords:", error)
       toast({
@@ -122,33 +169,56 @@ const SongList = (): JSX.Element => {
   }
 
   // Function to toggle favorite
-  const handleToggleFavorite = async (songId: string): Promise<void> => {
-    if (!user) {
-      toast({
-        title: "กรุณาเข้าสู่ระบบ",
-        description: "กรุณาเข้าสู่ระบบก่อนเพิ่ม/ลบเพลงโปรด",
-        variant: "destructive",
-      })
-      return
-    }
-
+  const handleToggleFavorite = async (songId: string) => {
     try {
-      const result = await toggleFavorite(songId)
+      // ดึงข้อมูลผู้ใช้ปัจจุบัน
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (result.success) {
-        setSongs((prevSongs) =>
-          prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: result.is_favorite } : song)),
-        )
+      if (!user) {
+        toast({
+          title: "กรุณาเข้าสู่ระบบ",
+          description: "กรุณาเข้าสู่ระบบก่อนเพิ่ม/ลบเพลงโปรด",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // ตรวจสอบว่าเพลงนี้เป็นเพลงโปรดของผู้ใช้หรือไม่
+      const { data: favorite } = await supabase
+        .from("favorites")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("song_id", songId)
+        .single()
+
+      if (favorite) {
+        // ถ้าเป็นเพลงโปรดอยู่แล้ว ให้ลบออก
+        const { error } = await supabase.from("favorites").delete().eq("id", favorite.id)
+
+        if (error) throw error
+
+        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: false } : song)))
 
         toast({
-          title: result.is_favorite ? "เพิ่มเข้าเพลงโปรดแล้ว" : "ลบออกจากเพลงโปรดแล้ว",
-          description: result.message,
+          title: "ลบออกจากเพลงโปรดแล้ว",
+          description: "ลบเพลงออกจากรายการเพลงโปรดเรียบร้อยแล้ว",
         })
       } else {
+        // ถ้ายังไม่เป็นเพลงโปรด ให้เพิ่มเข้าไป
+        const { error } = await supabase.from("favorites").insert({
+          user_id: user.id,
+          song_id: songId,
+        })
+
+        if (error) throw error
+
+        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: true } : song)))
+
         toast({
-          title: "เกิดข้อผิดพลาด",
-          description: result.message,
-          variant: "destructive",
+          title: "เพิ่มเข้าเพลงโปรดแล้ว",
+          description: "เพิ่มเพลงเข้ารายการเพลงโปรดเรียบร้อยแล้ว",
         })
       }
     } catch (error) {
@@ -187,8 +257,9 @@ const SongList = (): JSX.Element => {
     const allStrings = [...new Set([...allTitles, ...allArtists, ...lyricsKeywords])]
 
     // ค้นหาคำที่คล้ายกับคำค้นหา
-    const similarStrings = findSimilarStrings(searchQuery, allStrings, 0.3)
-    setSuggestions(similarStrings.slice(0, 5)) // แสดงเฉพาะ 5 คำแนะนำแรก
+    const similarStrings = allStrings.filter((str) => str.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5) // แสดงเฉพาะ 5 คำแนะนำแรก
+
+    setSuggestions(similarStrings)
   }, [searchQuery, songs])
 
   // Filter songs based on search query, selected category, selected language, and selected tag
@@ -279,8 +350,8 @@ const SongList = (): JSX.Element => {
   const totalPages = Math.ceil(filteredSongs.length / ITEMS_PER_PAGE)
 
   // Generate page numbers for pagination
-  const getPageNumbers = (): (number | "ellipsis")[] => {
-    const pageNumbers: (number | "ellipsis")[] = []
+  const getPageNumbers = () => {
+    const pageNumbers = []
 
     if (totalPages <= 7) {
       // If there are 7 or fewer pages, show all page numbers
@@ -319,13 +390,13 @@ const SongList = (): JSX.Element => {
   }
 
   // จัดการการเลือกคำแนะนำ
-  const handleSelectSuggestion = (suggestion: string): void => {
+  const handleSelectSuggestion = (suggestion: string) => {
     setSearchQuery(suggestion)
     setShowSuggestions(false)
   }
 
   // ฟังก์ชันสำหรับรีเซ็ตตัวกรองทั้งหมด
-  const resetFilters = (): void => {
+  const resetFilters = () => {
     setSearchQuery("")
     setSelectedCategory("all")
     setSelectedLanguage("all")
@@ -408,12 +479,12 @@ const SongList = (): JSX.Element => {
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <div className="relative w-full md:w-2/3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               type="text"
               placeholder="ค้นหาเพลงจากชื่อ, ศิลปิน หรือเนื้อเพลง"
-              className="pl-10 pr-4 py-2 border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700"
+              className="pl-10 pr-4 py-2"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value)
@@ -435,24 +506,21 @@ const SongList = (): JSX.Element => {
             variant="outline"
             size="sm"
             onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
-            className="border-blue-100 dark:border-blue-800 text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900"
+            className="text-primary"
           >
             <SlidersHorizontal className="h-4 w-4 mr-2" />
             ค้นหาขั้นสูง
           </Button>
           <div className="w-full md:w-auto">
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-full md:w-[180px] border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700">
-                <Filter className="h-4 w-4 mr-2 text-gray-400" />
+              <SelectTrigger className="w-full md:w-[180px]">
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="หมวดหมู่" />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectContent>
+                <SelectItem value="all">ทั้งหมด</SelectItem>
                 {categories.map((category) => (
-                  <SelectItem
-                    key={category.value}
-                    value={category.value}
-                    className="text-gray-900 dark:text-gray-100 focus:bg-blue-50 dark:focus:bg-blue-900"
-                  >
+                  <SelectItem key={category.value} value={category.value}>
                     {category.label}
                   </SelectItem>
                 ))}
@@ -464,15 +532,10 @@ const SongList = (): JSX.Element => {
       </div>
 
       <Collapsible open={isAdvancedSearchOpen} onOpenChange={setIsAdvancedSearchOpen} className="space-y-4">
-        <CollapsibleContent className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-blue-50 dark:border-blue-900">
+        <CollapsibleContent className="bg-card rounded-lg shadow-sm p-4 border border-border">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-blue-900 dark:text-blue-300">ค้นหาขั้นสูง</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={resetFilters}
-              className="border-blue-100 dark:border-blue-800 text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900"
-            >
+            <h3 className="text-lg font-medium text-primary">ค้นหาขั้นสูง</h3>
+            <Button variant="outline" size="sm" onClick={resetFilters} className="text-primary">
               <X className="h-4 w-4 mr-2" />
               รีเซ็ตตัวกรอง
             </Button>
@@ -480,52 +543,45 @@ const SongList = (): JSX.Element => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-blue-900 dark:text-blue-300">หมวดหมู่ (เลือกได้หลายรายการ)</label>
+              <label className="text-sm font-medium text-primary">หมวดหมู่ (เลือกได้หลายรายการ)</label>
               <MultiSelect
                 options={multiSelectCategoryOptions}
                 selected={selectedCategories}
                 onChange={setSelectedCategories}
                 placeholder="เลือกหมวดหมู่..."
-                className="border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-blue-900 dark:text-blue-300">ภาษา (เลือกได้หลายรายการ)</label>
+              <label className="text-sm font-medium text-primary">ภาษา (เลือกได้หลายรายการ)</label>
               <MultiSelect
                 options={multiSelectLanguageOptions}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
                 placeholder="เลือกภาษา..."
-                className="border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700"
               />
             </div>
           </div>
 
           <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-blue-900 dark:text-blue-300">แท็ก (เลือกได้หลายรายการ)</label>
+            <label className="text-sm font-medium text-primary">แท็ก (เลือกได้หลายรายการ)</label>
             <MultiSelect
               options={multiSelectTagOptions}
               selected={selectedTags}
               onChange={setSelectedTags}
               placeholder="เลือกแท็ก..."
-              className="border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700"
             />
           </div>
 
           <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-blue-900 dark:text-blue-300">เรียงลำดับตาม</label>
+            <label className="text-sm font-medium text-primary">เรียงลำดับตาม</label>
             <Select value={sortOption} onValueChange={setSortOption}>
-              <SelectTrigger className="w-full border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="เลือกการเรียงลำดับ" />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectContent>
                 {sortOptions.map((option) => (
-                  <SelectItem
-                    key={option.value}
-                    value={option.value}
-                    className="text-gray-900 dark:text-gray-100 focus:bg-blue-50 dark:focus:bg-blue-900"
-                  >
+                  <SelectItem key={option.value} value={option.value}>
                     <div className="flex items-center">
                       {option.icon}
                       {option.label}
@@ -536,14 +592,14 @@ const SongList = (): JSX.Element => {
             </Select>
           </div>
 
-          <div className="mt-4 pt-2 border-t border-blue-50 dark:border-blue-900">
+          <div className="mt-4 pt-2 border-t border-border">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500 dark:text-gray-400">พบ {filteredSongs.length} เพลงที่ตรงกับเงื่อนไข</p>
+              <p className="text-sm text-muted-foreground">พบ {filteredSongs.length} เพลงที่ตรงกับเงื่อนไข</p>
               <Button
                 variant="default"
                 size="sm"
                 onClick={() => setIsAdvancedSearchOpen(false)}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white"
+                className="bg-primary text-primary-foreground"
               >
                 ใช้ตัวกรอง
               </Button>
@@ -556,11 +612,8 @@ const SongList = (): JSX.Element => {
         {tagOptions.map((tag) => (
           <Badge
             key={tag.value}
-            className={`cursor-pointer transition-all ${
-              selectedTag === tag.value
-                ? tag.color || "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
+            variant={selectedTag === tag.value ? "default" : "outline"}
+            className="cursor-pointer"
             onClick={() => setSelectedTag(tag.value)}
           >
             {tag.label}
@@ -630,18 +683,19 @@ const SongList = (): JSX.Element => {
           )}
         </>
       ) : (
-        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-blue-50 dark:border-blue-900">
-          <p className="text-gray-500 dark:text-gray-400 mb-2">
+        <div className="text-center py-12 bg-card rounded-lg shadow-sm border border-border">
+          <p className="text-muted-foreground mb-2">
             ไม่พบเพลงที่ตรงกับคำค้นหา &quot;{searchQuery}&quot; ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
           </p>
           {suggestions.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">คุณอาจกำลังค้นหา:</p>
+              <p className="text-sm text-muted-foreground mb-2">คุณอาจกำลังค้นหา:</p>
               <div className="flex flex-wrap justify-center gap-2">
                 {suggestions.map((suggestion) => (
                   <Badge
                     key={suggestion}
-                    className="cursor-pointer bg-blue-50 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800"
+                    variant="secondary"
+                    className="cursor-pointer"
                     onClick={() => setSearchQuery(suggestion)}
                   >
                     {suggestion}
@@ -655,5 +709,3 @@ const SongList = (): JSX.Element => {
     </div>
   )
 }
-
-export default SongList
