@@ -1,309 +1,70 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { Search, Filter, SlidersHorizontal, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MultiSelect } from "@/components/shadcn/multi-select"
+import { Search, Tag } from "lucide-react"
+import { Input } from "@/components/shadcn/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
+import SongCard from "@/components/song-card"
+import { AddSongButton } from "@/components/add-song-button"
+import { SearchSuggestions } from "@/components/search-suggestions"
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination"
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
-import { SearchSuggestions } from "@/components/search-suggestions"
-import { SongListSkeleton } from "@/components/skeletons/song-list-skeleton"
-import { AddSongButton } from "@/components/add-song-button"
-import { DevModeToggle } from "@/components/dev-mode-toggle"
-import SongCard from "@/components/song-card"
-import { useToast } from "@/hooks/use-toast"
-import { mockSongs } from "@/lib/mock-data"
-import type { Song, SongTag } from "@/types/song"
+} from "@/components/shadcn/pagination"
+import { Badge } from "@/components/shadcn/badge"
+import type { Song, SongLanguage, SongTag } from "@/types/song"
+import { useAuth } from "@/hooks/use-auth"
+import { findSimilarStrings } from "@/utils/string-similarity"
+import { cn } from "@/lib/utils"
 
 const ITEMS_PER_PAGE = 10 // จำนวนเพลงต่อหน้า
 
-// Define the categories array
-const categories = [
-  { label: "สรรเสริญ", value: "praise" },
-  { label: "นมัสการ", value: "worship" },
-  { label: "บทเพลงเปิด", value: "opening" },
-]
+const SongList = (): JSX.Element => {
+  // เพิ่มภาษาและ tags ให้กับข้อมูลตัวอย่าง
+  const initialSongs = mockSongs.map((song) => ({
+    ...song,
+    showChords: true,
+    language: song.language || ((song.id % 3 === 0 ? "english" : "thai") as SongLanguage), // สุ่มภาษาถ้าไม่มีการกำหนด
+    tags: song.tags || getRandomTags(), // สุ่ม tags ถ้าไม่มีการกำหนด
+    createdAt: song.createdAt || new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(), // สุ่มวันที่ย้อนหลังไม่เกิน 30 วัน
+  }))
 
-interface SongListProps {
-  initialSongs?: Song[]
-}
-
-export default function SongList({ initialSongs = [] }: SongListProps) {
   const [songs, setSongs] = useState<Song[]>(initialSongs)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("all")
-  const [selectedTag, setSelectedTag] = useState<string>("all")
-  const [filteredSongs, setFilteredSongs] = useState<Song[]>(initialSongs)
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("all") // เพิ่มตัวกรองภาษา
+  const [selectedTag, setSelectedTag] = useState<string>("all") // เพิ่มตัวกรองตาม tag
+  const [filteredSongs, setFilteredSongs] = useState<Song[]>(songs)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [paginatedSongs, setPaginatedSongs] = useState<Song[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false)
-  const [isLoading, setIsLoading] = useState<boolean>(initialSongs.length === 0)
-  const [isDevMode, setIsDevMode] = useState<boolean>(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
-  const supabase = createClientComponentClient()
-
-  const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState<boolean>(false)
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
-  const [sortOption, setSortOption] = useState<string>("newest")
-
-  // แก้ไขฟังก์ชัน fetchSongs เพื่อดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
-  const fetchSongs = async () => {
-    try {
-      setIsLoading(true)
-
-      // ถ้าอยู่ในโหมด Dev Mode ให้ใช้ข้อมูลจำลอง
-      if (isDevMode) {
-        setSongs(mockSongs)
-        setIsLoading(false)
-        return
-      }
-
-      // ดึงข้อมูลผู้ใช้ปัจจุบัน
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      // ดึงข้อมูลเพลงทั้งหมด
-      const { data: songsData, error } = await supabase
-        .from("songs")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-
-      console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
-
-      // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
-      let favorites: Record<string, boolean> = {}
-
-      if (user) {
-        const { data: favoritesData } = await supabase.from("favorites").select("song_id").eq("user_id", user.id)
-
-        if (favoritesData) {
-          favorites = favoritesData.reduce(
-            (acc, fav) => {
-              acc[fav.song_id] = true
-              return acc
-            },
-            {} as Record<string, boolean>,
-          )
-        }
-      }
-
-      // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
-      const songsWithUserInfo = await Promise.all(
-        songsData?.map(async (song) => {
-          if (song.user_id) {
-            const { data: userData } = await supabase
-              .from("profiles")
-              .select("username, display_name")
-              .eq("id", song.user_id)
-              .single()
-
-            return {
-              ...song,
-              is_favorite: favorites[song.id] || false,
-              user_info: userData || null,
-            }
-          }
-          return {
-            ...song,
-            is_favorite: favorites[song.id] || false,
-            user_info: null,
-          }
-        }) || [],
-      )
-
-      setSongs(songsWithUserInfo)
-    } catch (error) {
-      console.error("Error fetching songs:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถดึงข้อมูลเพลงได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // เมื่อ isDevMode เปลี่ยน ให้ดึงข้อมูลใหม่
-  useEffect(() => {
-    fetchSongs()
-  }, [isDevMode])
-
-  useEffect(() => {
-    // ถ้ามี initialSongs ให้ใช้ initialSongs เป็นค่าเริ่มต้น
-    if (initialSongs.length > 0 && !isDevMode) {
-      setSongs(initialSongs)
-      setIsLoading(false)
-    } else {
-      // ถ้าไม่มี initialSongs หรืออยู่ในโหมด Dev Mode ให้ดึงข้อมูลใหม่
-      fetchSongs()
-    }
-  }, [initialSongs])
+  const { isAdmin } = useAuth()
 
   // Function to update a song
-  const updateSong = (updatedSong: Song) => {
+  const updateSong = (updatedSong: Song): void => {
     setSongs((prevSongs) => prevSongs.map((song) => (song.id === updatedSong.id ? updatedSong : song)))
   }
 
   // Function to add a new song
-  const addSong = (newSong: Song) => {
-    setSongs((prevSongs) => [newSong, ...prevSongs])
+  const addSong = (newSong: Song): void => {
+    setSongs((prevSongs) => [newSong, ...prevSongs]) // เพิ่มเพลงใหม่ไว้ที่ตำแหน่งแรก
   }
 
   // Function to delete a song
-  const deleteSong = async (songId: string) => {
-    try {
-      // ถ้าอยู่ในโหมด Dev Mode ให้ลบเฉพาะใน state
-      if (isDevMode) {
-        setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
-        toast({
-          title: "ลบเพลงสำเร็จ (Dev Mode)",
-          description: "ลบเพลงเรียบร้อยแล้ว (ข้อมูลจำลอง)",
-        })
-        return
-      }
-
-      const { error } = await supabase.from("songs").delete().eq("id", songId)
-
-      if (error) throw error
-
-      setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
-
-      toast({
-        title: "ลบเพลงสำเร็จ",
-        description: "ลบเพลงเรียบร้อยแล้ว",
-      })
-    } catch (error) {
-      console.error("Error deleting song:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถลบเพลงได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      })
-    }
+  const deleteSong = (songId: string): void => {
+    setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
   }
 
   // Function to toggle chord visibility
-  const handleToggleChords = async (songId: string, showChords: boolean) => {
-    try {
-      // ถ้าอยู่ในโหมด Dev Mode ให้อัปเดตเฉพาะใน state
-      if (isDevMode) {
-        setSongs((prevSongs) =>
-          prevSongs.map((song) => (song.id === songId ? { ...song, show_chords: showChords } : song)),
-        )
-        return
-      }
-
-      const { error } = await supabase.from("songs").update({ show_chords: showChords }).eq("id", songId)
-
-      if (error) throw error
-
-      setSongs((prevSongs) =>
-        prevSongs.map((song) => (song.id === songId ? { ...song, show_chords: showChords } : song)),
-      )
-    } catch (error) {
-      console.error("Error toggling chords:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถอัปเดตการแสดง/ซ่อนคอร์ดได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Function to toggle favorite
-  const handleToggleFavorite = async (songId: string) => {
-    try {
-      // ถ้าอยู่ในโหมด Dev Mode ให้อัปเดตเฉพาะใน state
-      if (isDevMode) {
-        setSongs((prevSongs) =>
-          prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: !song.is_favorite } : song)),
-        )
-        toast({
-          title: (song) => (song.is_favorite ? "ลบออกจากเพลงโปรดแล้ว (Dev Mode)" : "เพิ่มเข้าเพลงโปรดแล้ว (Dev Mode)"),
-          description: "อัปเดตเพลงโปรดเรียบร้อยแล้ว (ข้อมูลจำลอง)",
-        })
-        return
-      }
-
-      // ดึงข้อมูลผู้ใช้ปัจจุบัน
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast({
-          title: "กรุณาเข้าสู่ระบบ",
-          description: "กรุณาเข้าสู่ระบบก่อนเพิ่ม/ลบเพลงโปรด",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // ตรวจสอบว่าเพลงนี้เป็นเพลงโปรดของผู้ใช้หรือไม่
-      const { data: favorite } = await supabase
-        .from("favorites")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("song_id", songId)
-        .single()
-
-      if (favorite) {
-        // ถ้าเป็นเพลงโปรดอยู่แล้ว ให้ลบออก
-        const { error } = await supabase.from("favorites").delete().eq("id", favorite.id)
-
-        if (error) throw error
-
-        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: false } : song)))
-
-        toast({
-          title: "ลบออกจากเพลงโปรดแล้ว",
-          description: "ลบเพลงออกจากรายการเพลงโปรดเรียบร้อยแล้ว",
-        })
-      } else {
-        // ถ้ายังไม่เป็นเพลงโปรด ให้เพิ่มเข้าไป
-        const { error } = await supabase.from("favorites").insert({
-          user_id: user.id,
-          song_id: songId,
-        })
-
-        if (error) throw error
-
-        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: true } : song)))
-
-        toast({
-          title: "เพิ่มเข้าเพลงโปรดแล้ว",
-          description: "เพิ่มเพลงเข้ารายการเพลงโปรดเรียบร้อยแล้ว",
-        })
-      }
-    } catch (error) {
-      console.error("Error toggling favorite:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถเพิ่ม/ลบเพลงโปรดได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      })
-    }
+  const toggleChords = (songId: string, showChords: boolean): void => {
+    setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, showChords } : song)))
   }
 
   // สร้างรายการคำแนะนำจากชื่อเพลง, ศิลปิน และเนื้อเพลง
@@ -332,9 +93,8 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
     const allStrings = [...new Set([...allTitles, ...allArtists, ...lyricsKeywords])]
 
     // ค้นหาคำที่คล้ายกับคำค้นหา
-    const similarStrings = allStrings.filter((str) => str.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5) // แสดงเฉพาะ 5 คำแนะนำแรก
-
-    setSuggestions(similarStrings)
+    const similarStrings = findSimilarStrings(searchQuery, allStrings, 0.3)
+    setSuggestions(similarStrings.slice(0, 5)) // แสดงเฉพาะ 5 คำแนะนำแรก
   }, [searchQuery, songs])
 
   // Filter songs based on search query, selected category, selected language, and selected tag
@@ -350,69 +110,30 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
       )
     }
 
-    // กรองตามหมวดหมู่ (แบบเลือกได้หลายรายการ)
-    if (selectedCategories.length > 0) {
-      result = result.filter((song) => selectedCategories.includes(song.category))
-    } else if (selectedCategory !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือกหมวดหมู่ในการค้นหาขั้นสูง
+    if (selectedCategory !== "all") {
       result = result.filter((song) => song.category === selectedCategory)
     }
 
-    // กรองตามภาษา (แบบเลือกได้หลายรายการ)
-    if (selectedLanguages.length > 0) {
-      result = result.filter((song) => selectedLanguages.includes(song.language))
-    } else if (selectedLanguage !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือกภาษาในการค้นหาขั้นสูง
+    // กรองตามภาษา
+    if (selectedLanguage !== "all") {
       result = result.filter((song) => song.language === selectedLanguage)
     }
 
-    // กรองตาม tag (แบบเลือกได้หลายรายการ)
-    if (selectedTags.length > 0) {
-      result = result.filter((song) => song.tags && song.tags.some((tag) => selectedTags.includes(tag)))
-    } else if (selectedTag !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือก tag ในการค้นหาขั้นสูง
+    // กรองตาม tag
+    if (selectedTag !== "all") {
       result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
     }
 
-    // เรียงลำดับเพลงตามตัวเลือกการเรียงลำดับ
+    // เรียงลำดับเพลงตามวันที่เพิ่ม (เพลงล่าสุดอยู่บนสุด)
     result = [...result].sort((a, b) => {
-      switch (sortOption) {
-        case "newest":
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateB - dateA // เรียงจากใหม่ไปเก่า
-        case "oldest":
-          const dateC = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateD = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateC - dateD // เรียงจากเก่าไปใหม่
-        case "titleAsc":
-          return a.title.localeCompare(b.title) // เรียงตามชื่อเพลง A-Z
-        case "titleDesc":
-          return b.title.localeCompare(a.title) // เรียงตามชื่อเพลง Z-A
-        case "artistAsc":
-          return a.artist.localeCompare(b.artist) // เรียงตามชื่อศิลปิน A-Z
-        case "artistDesc":
-          return b.artist.localeCompare(a.artist) // เรียงตามชื่อศิลปิน Z-A
-        default:
-          const dateE = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateF = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateF - dateE // เรียงจากใหม่ไปเก่า (ค่าเริ่มต้น)
-      }
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateB - dateA // เรียงจากใหม่ไปเก่า
     })
 
     setFilteredSongs(result)
     setCurrentPage(1) // Reset to first page when filters change
-  }, [
-    searchQuery,
-    selectedCategory,
-    selectedLanguage,
-    selectedTag,
-    songs,
-    selectedCategories,
-    selectedLanguages,
-    selectedTags,
-    sortOption,
-  ])
+  }, [searchQuery, selectedCategory, selectedLanguage, selectedTag, songs])
 
   // Handle pagination
   useEffect(() => {
@@ -425,8 +146,8 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
   const totalPages = Math.ceil(filteredSongs.length / ITEMS_PER_PAGE)
 
   // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pageNumbers = []
+  const getPageNumbers = (): (number | "ellipsis")[] => {
+    const pageNumbers: (number | "ellipsis")[] = []
 
     if (totalPages <= 7) {
       // If there are 7 or fewer pages, show all page numbers
@@ -465,46 +186,25 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
   }
 
   // จัดการการเลือกคำแนะนำ
-  const handleSelectSuggestion = (suggestion: string) => {
+  const handleSelectSuggestion = (suggestion: string): void => {
     setSearchQuery(suggestion)
     setShowSuggestions(false)
+    searchInputRef.current?.focus()
   }
 
-  // ฟังก์ชันสำหรับรีเซ็ตตัวกรองทั้งหมด
-  const resetFilters = () => {
-    setSearchQuery("")
-    setSelectedCategory("all")
-    setSelectedLanguage("all")
-    setSelectedTag("all")
-    setSelectedCategories([])
-    setSelectedLanguages([])
-    setSelectedTags([])
-    setSortOption("newest")
-  }
+  // จัดการการคลิกนอก dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent): void => {
+      if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
 
-  // ตัวเลือกสำหรับการเรียงลำดับ
-  const sortOptions = [
-    { label: "ล่าสุด", value: "newest", icon: <Calendar className="h-4 w-4 mr-2" /> },
-    { label: "เก่าสุด", value: "oldest", icon: <Calendar className="h-4 w-4 mr-2" /> },
-    { label: "ชื่อเพลง A-Z", value: "titleAsc", icon: <ArrowDownAZ className="h-4 w-4 mr-2" /> },
-    { label: "ชื่อเพลง Z-A", value: "titleDesc", icon: <ArrowUpZA className="h-4 w-4 mr-2" /> },
-    { label: "ศิลปิน A-Z", value: "artistAsc", icon: <ArrowDownAZ className="h-4 w-4 mr-2" /> },
-    { label: "ศิลปิน Z-A", value: "artistDesc", icon: <ArrowUpZA className="h-4 w-4 mr-2" /> },
-  ]
-
-  // ตัวเลือกสำหรับหมวดหมู่
-  const categoryOptions = [
-    { label: "สรรเสริญ", value: "praise" },
-    { label: "นมัสการ", value: "worship" },
-    { label: "บทเพลงเปิด", value: "opening" },
-  ]
-
-  // ตัวเลือกสำหรับภาษา
-  const languageOptions = [
-    { label: "ภาษาไทย", value: "thai" },
-    { label: "ภาษาอังกฤษ", value: "english" },
-    { label: "ภาษาอื่นๆ", value: "other" },
-  ]
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   // ตัวเลือกสำหรับ tags
   const tagOptions = [
@@ -540,164 +240,110 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
     { label: "อื่นๆ", value: "other", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" },
   ]
 
-  // ตัวเลือกสำหรับ MultiSelect
-  const multiSelectCategoryOptions = categoryOptions.map((cat) => ({ label: cat.label, value: cat.value }))
-  const multiSelectLanguageOptions = languageOptions.map((lang) => ({ label: lang.label, value: lang.value }))
-  const multiSelectTagOptions = tagOptions.slice(1).map((tag) => ({
-    label: tag.label,
-    value: tag.value,
-    color: tag.color,
-  }))
+  // ฟังก์ชันสำหรับสุ่ม tags
+  function getRandomTags(): SongTag[] {
+    const allTags: SongTag[] = [
+      "slow",
+      "fast",
+      "medium",
+      "acoustic",
+      "electronic",
+      "hymn",
+      "contemporary",
+      "kids",
+      "other",
+    ]
+    const numTags = Math.floor(Math.random() * 3) + 1 // สุ่มจำนวน tags ระหว่าง 1-3
+    const shuffled = [...allTags].sort(() => 0.5 - Math.random())
+    return shuffled.slice(0, numTags) as SongTag[]
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
-        <div className="relative w-full md:w-2/3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={searchInputRef}
-              type="text"
-              placeholder="ค้นหาเพลงจากชื่อ, ศิลปิน หรือเนื้อเพลง"
-              className="pl-10 pr-4 py-2"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                setShowSuggestions(e.target.value.length >= 2)
-              }}
-              onFocus={() => setShowSuggestions(searchQuery.length >= 2)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            />
-          </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            ref={searchInputRef}
+            placeholder="ค้นหาเพลงจากชื่อ, ศิลปิน หรือเนื้อเพลง..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            className="pl-10 bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700"
+          />
           <SearchSuggestions
             suggestions={suggestions}
             onSelectSuggestion={handleSelectSuggestion}
-            isVisible={showSuggestions}
-            className="z-10"
+            isVisible={showSuggestions && suggestions.length > 0}
           />
         </div>
-        <div className="flex gap-2">
-          <DevModeToggle isDevMode={isDevMode} onToggle={setIsDevMode} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
-            className="text-primary"
-          >
-            <SlidersHorizontal className="h-4 w-4 mr-2" />
-            ค้นหาขั้นสูง
-          </Button>
-          <div className="w-full md:w-auto">
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="หมวดหมู่" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">ทั้งหมด</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <AddSongButton className="hidden md:flex" onAddSong={addSong} />
+        <div className="flex flex-wrap gap-4">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectValue placeholder="หมวดหมู่" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectItem value="all" className="text-gray-900 dark:text-gray-100">
+                ทั้งหมด
+              </SelectItem>
+              <SelectItem value="praise" className="text-gray-900 dark:text-gray-100">
+                สรรเสริญ
+              </SelectItem>
+              <SelectItem value="worship" className="text-gray-900 dark:text-gray-100">
+                นมัสการ
+              </SelectItem>
+              <SelectItem value="opening" className="text-gray-900 dark:text-gray-100">
+                บทเพลงเปิด
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+            <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectValue placeholder="ภาษา" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+              <SelectItem value="all" className="text-gray-900 dark:text-gray-100">
+                ทุกภาษา
+              </SelectItem>
+              <SelectItem value="thai" className="text-gray-900 dark:text-gray-100">
+                ภาษาไทย
+              </SelectItem>
+              <SelectItem value="english" className="text-gray-900 dark:text-gray-100">
+                ภาษาอังกฤษ
+              </SelectItem>
+              <SelectItem value="other" className="text-gray-900 dark:text-gray-100">
+                ภาษาอื่นๆ
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {isAdmin && (
+            <AddSongButton
+              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white"
+              onAddSong={addSong}
+            />
+          )}
         </div>
       </div>
 
-      {isDevMode && (
-        <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
-          <p className="text-amber-800 dark:text-amber-300 text-sm font-medium">
-            โหมดนักพัฒนา: กำลังใช้ข้อมูลจำลอง (Mock Data) จำนวน {mockSongs.length} เพลง
-          </p>
-        </div>
-      )}
-
-      <Collapsible open={isAdvancedSearchOpen} onOpenChange={setIsAdvancedSearchOpen} className="space-y-4">
-        <CollapsibleContent className="bg-card rounded-lg shadow-sm p-4 border border-border">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-primary">ค้นหาขั้นสูง</h3>
-            <Button variant="outline" size="sm" onClick={resetFilters} className="text-primary">
-              <X className="h-4 w-4 mr-2" />
-              รีเซ็ตตัวกรอง
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-primary">หมวดหมู่ (เลือกได้หลายรายการ)</label>
-              <MultiSelect
-                options={multiSelectCategoryOptions}
-                selected={selectedCategories}
-                onChange={setSelectedCategories}
-                placeholder="เลือกหมวดหมู่..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-primary">ภาษา (เลือกได้หลายรายการ)</label>
-              <MultiSelect
-                options={multiSelectLanguageOptions}
-                selected={selectedLanguages}
-                onChange={setSelectedLanguages}
-                placeholder="เลือกภาษา..."
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-primary">แท็ก (เลือกได้หลายรายการ)</label>
-            <MultiSelect
-              options={multiSelectTagOptions}
-              selected={selectedTags}
-              onChange={setSelectedTags}
-              placeholder="เลือกแท็ก..."
-            />
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-primary">เรียงลำดับตาม</label>
-            <Select value={sortOption} onValueChange={setSortOption}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="เลือกการเรียงลำดับ" />
-              </SelectTrigger>
-              <SelectContent>
-                {sortOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div className="flex items-center">
-                      {option.icon}
-                      {option.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="mt-4 pt-2 border-t border-border">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">พบ {filteredSongs.length} เพลงที่ตรงกับเงื่อนไข</p>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setIsAdvancedSearchOpen(false)}
-                className="bg-primary text-primary-foreground"
-              >
-                ใช้ตัวกรอง
-              </Button>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <div className="flex flex-wrap gap-2 mb-4">
+      {/* เพิ่มตัวกรองตาม tags */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
+          <Tag className="h-4 w-4 mr-1" />
+          แท็ก:
+        </span>
         {tagOptions.map((tag) => (
           <Badge
             key={tag.value}
-            variant={selectedTag === tag.value ? "default" : "outline"}
-            className="cursor-pointer"
+            className={cn(
+              "cursor-pointer",
+              selectedTag === tag.value
+                ? tag.value === "all"
+                  ? "bg-blue-600 text-white dark:bg-blue-700 dark:text-white"
+                  : tag.color
+                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
             onClick={() => setSelectedTag(tag.value)}
           >
             {tag.label}
@@ -705,15 +351,9 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
         ))}
       </div>
 
-      <div className="md:hidden mb-4">
-        <AddSongButton className="w-full" onAddSong={addSong} />
-      </div>
-
-      {isLoading ? (
-        <SongListSkeleton />
-      ) : paginatedSongs.length > 0 ? (
-        <>
-          <div className="space-y-4">
+      <div className="space-y-4">
+        {paginatedSongs.length > 0 ? (
+          <>
             {paginatedSongs.map((song) => (
               <SongCard
                 key={song.id}
@@ -721,75 +361,293 @@ export default function SongList({ initialSongs = [] }: SongListProps) {
                 searchQuery={searchQuery}
                 onUpdateSong={updateSong}
                 onDeleteSong={deleteSong}
-                onToggleChords={handleToggleChords}
-                onToggleFavorite={handleToggleFavorite}
+                onToggleChords={toggleChords}
               />
             ))}
-          </div>
 
-          {totalPages > 1 && (
-            <Pagination className="mt-6">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
-                  />
-                </PaginationItem>
-
-                {getPageNumbers().map((pageNumber, index) =>
-                  pageNumber === "ellipsis" ? (
-                    <PaginationItem key={`ellipsis-${index}`}>
-                      <PaginationEllipsis />
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
                     </PaginationItem>
-                  ) : (
-                    <PaginationItem key={pageNumber}>
-                      <PaginationLink
-                        isActive={currentPage === pageNumber}
-                        onClick={() => setCurrentPage(pageNumber as number)}
-                      >
-                        {pageNumber}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ),
-                )}
 
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className={currentPage === totalPages ? "opacity-50 cursor-not-allowed" : ""}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
-        </>
-      ) : (
-        <div className="text-center py-12 bg-card rounded-lg shadow-sm border border-border">
-          <p className="text-muted-foreground mb-2">
-            ไม่พบเพลงที่ตรงกับคำค้นหา &quot;{searchQuery}&quot; ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
-          </p>
-          {suggestions.length > 0 && (
-            <div className="mt-4">
-              <p className="text-sm text-muted-foreground mb-2">คุณอาจกำลังค้นหา:</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {suggestions.map((suggestion) => (
-                  <Badge
-                    key={suggestion}
-                    variant="secondary"
-                    className="cursor-pointer"
-                    onClick={() => setSearchQuery(suggestion)}
-                  >
-                    {suggestion}
-                  </Badge>
-                ))}
+                    {getPageNumbers().map((pageNumber, index) => (
+                      <PaginationItem key={index}>
+                        {pageNumber === "ellipsis" ? (
+                          <PaginationEllipsis />
+                        ) : (
+                          <PaginationLink
+                            isActive={pageNumber === currentPage}
+                            onClick={() => setCurrentPage(pageNumber)}
+                          >
+                            {pageNumber}
+                          </PaginationLink>
+                        )}
+                      </PaginationItem>
+                    ))}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        ) : (
+          <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+            <p className="text-gray-500 dark:text-gray-400">
+              ไม่พบเพลงที่ตรงกับคำค้นหา "{searchQuery}" ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
+            </p>
+            {suggestions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-gray-600 dark:text-gray-400 mb-2">คุณอาจกำลังค้นหา:</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      className="px-3 py-1 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-800"
+                      onClick={() => handleSelectSuggestion(suggestion)}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
+
+// Mock data for demonstration - เพิ่มเป็น 20 เพลง
+const mockSongs: Song[] = [
+  {
+    id: "1",
+    title: "พระเจ้าทรงเป็นความรัก",
+    artist: "คณะนักร้องประสานเสียง",
+    category: "praise",
+    language: "thai",
+    tags: ["slow", "contemporary"],
+    lyrics:
+      "[G]พระเจ้าทรงเป็นความ[D]รัก\n[C]พระองค์ทรงรัก[G]เรา\n[G]พระเจ้าทรงเป็นความ[D]รัก\n[C]พระองค์ทรงรัก[G]เรา\n\n[Em]พระองค์ทรงส่งพระ[D]บุตร\n[C]มาสิ้นพระชนม์เพื่อ[G]เรา\n[Em]เพื่อเราจะได้มี[D]ชีวิต\n[C]ชีวิตนิรัน[G]ดร์",
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 วันที่แล้ว
+  },
+  {
+    id: "2",
+    title: "พระคุณพระเจ้า",
+    artist: "วงศ์วานวิหาร",
+    category: "worship",
+    language: "thai",
+    tags: ["slow", "hymn"],
+    lyrics:
+      "[G]พระคุณพระเจ้านั้นแสน[D]ชื่นใจ\n[C]ช่วยคนบาปอย่าง[G]ฉันได้รอด\n[Em]ฉันหลงทางพระองค์[D]ตามหา\n[C]ฉันตาบอดแต่เดี๋ยวนี้[G]เห็นแล้ว",
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 วันที่แล้ว
+  },
+  {
+    id: "3",
+    title: "ขอบคุณพระเจ้า",
+    artist: "คริสตจักรสัมพันธ์",
+    category: "opening",
+    language: "thai",
+    tags: ["medium", "contemporary"],
+    lyrics:
+      "[C]ขอบคุณพระเจ้า สำหรับความ[G]รักของพระองค์\n[F]ขอบคุณพระเจ้า สำหรับพระ[C]พรทุกอย่าง\n[C]ขอบคุณพระเจ้า สำหรับการ[G]ทรงนำ\n[F]ขอบคุณพระเจ้า สำหรับชีวิต[C]ใหม่",
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 วันที่แล้ว
+  },
+  // เพิ่มวันที่ให้กับเพลงที่เหลือโดยอัตโนมัติในโค้ดด้านบน
+  {
+    id: "4",
+    title: "สรรเสริญพระเจ้า",
+    artist: "คณะนักร้องรวมใจ",
+    category: "praise",
+    language: "thai",
+    tags: ["fast", "contemporary"],
+    lyrics:
+      "[D]สรรเสริญ สรรเสริญ สรรเสริญพระ[A]เจ้า\n[G]สรรเสริญ สรรเสริญ พระผู้ช่วยให้[D]รอด\n[Bm]พระองค์ทรงยิ่งใหญ่ พระองค์ทรง[A]สมควร\n[G]ได้รับคำสรรเสริญ จากปวงชนทั้ง[D]หลาย",
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "5",
+    title: "พระเยซูรักฉัน",
+    artist: "คริสตจักรพระพร",
+    category: "worship",
+    language: "thai",
+    tags: ["slow", "kids"],
+    lyrics:
+      "[G]พระเยซูรักฉัน พระ[D]คัมภีร์สอนไว้\n[C]เด็กเล็กๆ เป็นของพระ[G]องค์\n[Em]เด็กอ่อนแอ พระองค์ทรง[D]ฤทธิ์\n[C]พระองค์ทรงสถิตใน[G]สวรรค์",
+    createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "6",
+    title: "Amazing Grace",
+    artist: "John Newton",
+    category: "worship",
+    language: "english",
+    tags: ["slow", "hymn"],
+    lyrics:
+      "[D]Amazing [G]grace! How [D]sweet the [A]sound\n[D]That saved a [G]wretch like [A]me!\n[D]I once was [G]lost, but [D]now am [A]found;\n[D]Was blind, but [G]now I [A]see.[D]",
+    createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "7",
+    title: "How Great Thou Art",
+    artist: "Stuart K. Hine",
+    category: "praise",
+    language: "english",
+    tags: ["medium", "hymn"],
+    lyrics:
+      "[G]O Lord my [C]God, when I in [G]awesome [D]wonder\n[G]Consider [C]all the [G]worlds Thy hands have [D]made\n[G]I see the [C]stars, I hear the [G]rolling [D]thunder\n[G]Thy power [D]throughout the [G]universe [C]displayed\n\n[G]Then sings my [D]soul, my [G]Savior God, to [C]Thee\n[G]How great Thou [D]art, how [G]great Thou [C]art\n[G]Then sings my [D]soul, my [G]Savior God, to [C]Thee\n[G]How great Thou [D]art, how [G]great Thou [C]art[G]",
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "8",
+    title: "What A Friend We Have In Jesus",
+    artist: "Joseph M. Scriven",
+    category: "opening",
+    language: "english",
+    tags: ["medium", "hymn"],
+    lyrics:
+      "[C]What a friend we [F]have in [C]Jesus,\n[C]All our sins and [G7]griefs to [C]bear!\n[C]What a privilege to [F]carry\n[C]Every[G7]thing to God in [C]prayer!",
+    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "9",
+    title: "พระเยซูเป็นพระผู้ช่วย",
+    artist: "คณะนักร้องพระกิตติคุณ",
+    category: "praise",
+    language: "thai",
+    tags: ["fast", "contemporary"],
+    lyrics: "[D]พระเยซูเป็นพระผู้[A]ช่วย\n[G]ทรงช่วยฉันให้[D]รอด\n[D]พระองค์ทรงสละ[A]ชีวิต\n[G]เพื่อไถ่บาปของ[D]ฉัน",
+    createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "10",
+    title: "พระเจ้าทรงสถิตกับเรา",
+    artist: "คริสตจักรพระพร",
+    category: "worship",
+    language: "thai",
+    tags: ["slow", "acoustic"],
+    lyrics: "[G]พระเจ้าทรงสถิตกับ[D]เรา\n[C]ทุกเวลาทุก[G]นาที\n[Em]ไม่ว่าเราจะอยู่[D]ที่ไหน\n[C]พระองค์ทรงอยู่[G]ที่นั่น",
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "11",
+    title: "This Is My Father's World",
+    artist: "Maltbie D. Babcock",
+    category: "praise",
+    language: "english",
+    tags: ["medium", "hymn"],
+    lyrics:
+      "[G]This is my [C]Father's [G]world,\nAnd [G]to my [D]listening [G]ears\n[G]All [G]nature [C]sings, and [G]round me rings\nThe [D]music of the [G]spheres.",
+    createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "12",
+    title: "พระเยซูทรงชนะ",
+    artist: "คริสตจักรชัยชนะ",
+    category: "worship",
+    language: "thai",
+    tags: ["fast", "contemporary"],
+    lyrics: "[G]พระเยซูทรงชนะ[D]แล้ว\n[C]ชนะความตายและ[G]บาป\n[Em]พระองค์ทรงฟื้นคืน[D]พระชนม์\n[C]และประทับบนบัลลังก์[G]สวรรค์",
+    createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "13",
+    title: "Holy, Holy, Holy",
+    artist: "Reginald Heber",
+    category: "opening",
+    language: "english",
+    tags: ["medium", "hymn"],
+    lyrics:
+      "[D]Holy, [A]holy, [D]holy! [G]Lord God Al[D]mighty!\n[A]Early in the [D]morning our [A]song shall [D]rise to Thee;\n[D]Holy, [A]holy, [D]holy, [G]merciful and [D]mighty!\n[G]God in three [D]Persons, [A]blessed [D]Trinity!",
+    createdAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "14",
+    title: "พระเจ้าทรงเป็นผู้เลี้ยง",
+    artist: "คณะนักร้องรวมใจ",
+    category: "praise",
+    language: "thai",
+    tags: ["slow", "acoustic"],
+    lyrics: "[D]พระเจ้าทรงเป็นผู้[A]เลี้ยง\n[G]ข้าพเจ้าจะไม่[D]ขัดสน\n[D]พระองค์ทรงให้ข้าพเจ้า[A]นอนลง\n[G]ที่ทุ่งหญ้าเขียว[D]สด",
+    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "15",
+    title: "Great Is Thy Faithfulness",
+    artist: "Thomas O. Chisholm",
+    category: "worship",
+    language: "english",
+    tags: ["medium", "hymn"],
+    lyrics:
+      "[D]Great is Thy [G]faithful[D]ness, O God my [A]Father;\n[D]There is no [G]shadow of [D]turning with [A]Thee;\n[D]Thou changest [G]not, Thy com[D]passions, they [G]fail [D]not;\n[G]As Thou hast [D]been, Thou for[A]ever will [D]be.",
+    createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "16",
+    title: "พระเจ้าทรงสร้าง",
+    artist: "คณะนักร้องไทยนมัสการ",
+    category: "opening",
+    language: "thai",
+    tags: ["medium", "kids"],
+    lyrics: "[C]พระเจ้าทรงสร้างฟ้า[G]สวรรค์\n[F]และแผ่นดิน[C]โลก\n[C]ทรงสร้างทุกสิ่งด้วย[G]พระวจนะ\n[F]และลมพระโอษฐ์ของ[C]พระองค์",
+    createdAt: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "17",
+    title: "It Is Well With My Soul",
+    artist: "Horatio G. Spafford",
+    category: "praise",
+    language: "english",
+    tags: ["slow", "hymn"],
+    lyrics:
+      "[D]When peace, like a [G]river, at[D]tendeth my [G]way,\n[D]When sorrows like [G]sea billows [A]roll;\n[D]Whatever my [G]lot, Thou hast [D]taught me to [G]say,\n[D]It is [A]well, it is [D]well with my [G]soul.[D]",
+    createdAt: new Date(Date.now() - 17 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "18",
+    title: "พระเจ้าทรงเป็นความหวัง",
+    artist: "คณะนักร้องศิโยน",
+    category: "worship",
+    language: "thai",
+    tags: ["slow", "contemporary"],
+    lyrics: "[G]พระเจ้าทรงเป็นความ[D]หวัง\n[C]ของข้าพเจ้าเสมอ[G]มา\n[Em]ในยามทุกข์และยาม[D]สุข\n[C]พระองค์ทรงอยู่[G]เคียงข้าง",
+    createdAt: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "19",
+    title: "How Great Is Our God",
+    artist: "Chris Tomlin",
+    category: "opening",
+    language: "english",
+    tags: ["medium", "contemporary"],
+    lyrics:
+      "[G]The splendor of the [Em]King, [C]clothed in majesty\n[G]Let all the earth [Em]rejoice, [C]all the earth rejoice\n[G]He wraps Himself in [Em]light, and [C]darkness tries to hide\n[G]And trembles at His [Em]voice, [C]trembles at His voice",
+    createdAt: new Date(Date.now() - 19 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "20",
+    title: "พระเจ้าทรงเป็นความรอด",
+    artist: "คณะนักร้องรวมใจ",
+    category: "praise",
+    language: "thai",
+    tags: ["fast", "electronic"],
+    lyrics: "[D]พระเจ้าทรงเป็นความ[A]รอด\n[G]และเป็นกำลังของ[D]ข้าพเจ้า\n[D]พระองค์ทรงเป็นที่[A]พึ่ง\n[G]ในยามทุกข์[D]ยาก",
+    createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+]
+
+// Export the component as default
+export default SongList

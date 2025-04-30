@@ -1,31 +1,35 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { createClientComponentClient } from "@/utils/supabase"
-import type { UserSession } from "@/types/song"
+import { useState, useEffect } from "react"
 
-export function useAuth(): UserSession {
-  const [session, setSession] = useState<UserSession>({ user: null })
-  const supabase = createClientComponentClient()
+interface AuthState {
+  isAdmin: boolean
+  isAuthenticated: boolean
+}
+
+export const useAuth = (): AuthState => {
+  // In a real application, you would fetch this from your auth provider
+  // This is just a mock implementation
+  const [authState, setAuthState] = useState<AuthState>({
+    isAdmin: true, // Set to true for demonstration
+    isAuthenticated: true,
+  })
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data } = await supabase.auth.getSession()
-      setSession({ user: data.session?.user || null })
+    // Here you would check the user's authentication status
+    // For example, by fetching from an API or checking local storage
+
+    // Mock implementation
+    const checkAuth = (): void => {
+      // In a real app, this would verify the user's session
+      setAuthState({
+        isAdmin: true, // For demo purposes
+        isAuthenticated: true,
+      })
     }
 
-    getSession()
+    checkAuth()
+  }, [])
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession({ user: session?.user || null })
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase])
-
-  return session
+  return authState
 }
