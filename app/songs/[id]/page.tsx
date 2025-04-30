@@ -20,12 +20,25 @@ interface SongPageProps {
 export default async function SongPage({ params }: SongPageProps) {
   const supabase = createServerComponentClient({ cookies })
 
+  // แก้ไขการดึงข้อมูลเพลงและข้อมูลผู้ใช้
   // ดึงข้อมูลเพลงตาม ID
   const { data: song, error } = await supabase.from("songs").select("*").eq("id", params.id).single()
 
   // ถ้าไม่พบเพลง ให้แสดงหน้า 404
   if (error || !song) {
     notFound()
+  }
+
+  // ดึงข้อมูลผู้ใช้ที่เพิ่มเพลง
+  let userInfo = null
+  if (song.user_id) {
+    const { data: userData } = await supabase
+      .from("profiles")
+      .select("username, display_name")
+      .eq("id", song.user_id)
+      .single()
+
+    userInfo = userData
   }
 
   // ดึงข้อมูลผู้ใช้ปัจจุบัน
@@ -59,7 +72,8 @@ export default async function SongPage({ params }: SongPageProps) {
         </Button>
       </div>
 
-      <SongDetail song={song} isFavorite={isFavorite} currentUser={user} />
+      {/* แก้ไขการส่งข้อมูลไปยัง SongDetail component */}
+      <SongDetail song={song} userInfo={userInfo} isFavorite={isFavorite} currentUser={user} />
     </main>
   )
 }

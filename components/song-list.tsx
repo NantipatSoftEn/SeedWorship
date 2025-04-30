@@ -56,7 +56,7 @@ export default function SongList() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [sortOption, setSortOption] = useState<string>("newest")
 
-  // ดึงข้อมูลเพลงทั้งหมด
+  // แก้ไขฟังก์ชัน fetchSongs เพื่อดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
   const fetchSongs = async () => {
     try {
       setIsLoading(true)
@@ -73,6 +73,8 @@ export default function SongList() {
         .order("created_at", { ascending: false })
 
       if (error) throw error
+
+      console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
 
       // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
       let favorites: Record<string, boolean> = {}
@@ -91,14 +93,31 @@ export default function SongList() {
         }
       }
 
-      // เพิ่มข้อมูล is_favorite ให้กับเพลง
-      const songsWithFavorites =
-        songsData?.map((song) => ({
-          ...song,
-          is_favorite: favorites[song.id] || false,
-        })) || []
+      // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
+      const songsWithUserInfo = await Promise.all(
+        songsData?.map(async (song) => {
+          if (song.user_id) {
+            const { data: userData } = await supabase
+              .from("profiles")
+              .select("username, display_name")
+              .eq("id", song.user_id)
+              .single()
 
-      setSongs(songsWithFavorites)
+            return {
+              ...song,
+              is_favorite: favorites[song.id] || false,
+              user_info: userData || null,
+            }
+          }
+          return {
+            ...song,
+            is_favorite: favorites[song.id] || false,
+            user_info: null,
+          }
+        }) || [],
+      )
+
+      setSongs(songsWithUserInfo)
     } catch (error) {
       console.error("Error fetching songs:", error)
       toast({

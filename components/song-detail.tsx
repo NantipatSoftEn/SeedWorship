@@ -15,11 +15,20 @@ import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 
 interface SongDetailProps {
   song: Song
+  userInfo?: {
+    username: string | null
+    display_name: string | null
+  } | null
   isFavorite: boolean
   currentUser: any | null
 }
 
-export function SongDetail({ song, isFavorite: initialIsFavorite, currentUser }: SongDetailProps): JSX.Element {
+export function SongDetail({
+  song,
+  userInfo,
+  isFavorite: initialIsFavorite,
+  currentUser,
+}: SongDetailProps): JSX.Element {
   const [fontSize, setFontSize] = useState<string>("medium")
   const [showChords, setShowChords] = useState<boolean>(song.show_chords ?? true)
   const [isFavorite, setIsFavorite] = useState<boolean>(initialIsFavorite)
@@ -194,6 +203,11 @@ export function SongDetail({ song, isFavorite: initialIsFavorite, currentUser }:
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-primary">{song.title}</h1>
             <p className="text-xl text-muted-foreground mt-1">{song.artist}</p>
+            {userInfo && (
+              <p className="text-sm text-muted-foreground mt-2">
+                เพิ่มโดย: {userInfo.display_name || userInfo.username || "ไม่ระบุชื่อ"}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">

@@ -15,8 +15,14 @@ import { cn } from "@/lib/utils"
 import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 import type { JSX } from "react/jsx-runtime"
 
+// เพิ่มข้อมูล user_info ในประเภทข้อมูล SongCardProps
 interface SongCardProps {
-  song: Song
+  song: Song & {
+    user_info?: {
+      username: string | null
+      display_name: string | null
+    } | null
+  }
   searchQuery: string
   onUpdateSong?: (song: Song) => void
   onDeleteSong?: (songId: string) => void
@@ -202,6 +208,12 @@ export default function SongCard({
                         {getTagLabel(tag)}
                       </Badge>
                     ))}
+                  </div>
+                )}
+                {/* เพิ่มการแสดงข้อมูลผู้ใช้ที่เพิ่มเพลงในส่วนของข้อมูลเพลง */}
+                {song.user_info && (
+                  <div className="flex items-center text-xs text-muted-foreground mt-1">
+                    <span>เพิ่มโดย: {song.user_info.display_name || song.user_info.username || "ไม่ระบุชื่อ"}</span>
                   </div>
                 )}
               </div>
