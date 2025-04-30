@@ -1,10 +1,4 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export interface Database {
   public: {
@@ -22,6 +16,8 @@ export interface Database {
           user_id: string | null
           created_at: string
           updated_at: string
+          key: string | null
+          chord_keys: string[] | null
         }
         Insert: {
           id?: string
@@ -35,6 +31,8 @@ export interface Database {
           user_id?: string | null
           created_at?: string
           updated_at?: string
+          key?: string | null
+          chord_keys?: string[] | null
         }
         Update: {
           id?: string
@@ -48,6 +46,8 @@ export interface Database {
           user_id?: string | null
           created_at?: string
           updated_at?: string
+          key?: string | null
+          chord_keys?: string[] | null
         }
       }
       profiles: {

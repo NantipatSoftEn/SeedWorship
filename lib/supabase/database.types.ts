@@ -16,6 +16,8 @@ export interface Database {
           user_id: string | null
           created_at: string
           updated_at: string
+          key: string | null // คีย์หลักของเพลง
+          chord_keys: string[] | null // รายการคีย์ทั้งหมดที่มีคอร์ด
         }
         Insert: {
           id?: string
@@ -29,6 +31,8 @@ export interface Database {
           user_id?: string | null
           created_at?: string
           updated_at?: string
+          key?: string | null // คีย์หลักของเพลง
+          chord_keys?: string[] | null // รายการคีย์ทั้งหมดที่มีคอร์ด
         }
         Update: {
           id?: string
@@ -42,6 +46,8 @@ export interface Database {
           user_id?: string | null
           created_at?: string
           updated_at?: string
+          key?: string | null // คีย์หลักของเพลง
+          chord_keys?: string[] | null // รายการคีย์ทั้งหมดที่มีคอร์ด
         }
       }
       profiles: {

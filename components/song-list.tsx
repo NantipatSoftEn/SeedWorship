@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Search, Filter, SlidersHorizontal, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
+import { Search, Filter, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MultiSelect } from "@/components/shadcn/multi-select"
 import {
   Pagination,
   PaginationContent,
@@ -17,7 +16,6 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination"
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { SearchSuggestions } from "@/components/search-suggestions"
 import { SongListSkeleton } from "@/components/skeletons/song-list-skeleton"
 import { AddSongButton } from "@/components/add-song-button"
@@ -57,10 +55,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
   const { toast } = useToast()
   const supabase = createClient()
 
-  const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState<boolean>(false)
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([])
   const [sortOption, setSortOption] = useState<string>("newest")
 
   // แก้ไขฟังก์ชัน fetchSongs เพื่อดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
@@ -350,27 +344,15 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
       )
     }
 
-    // กรองตามหมวดหมู่ (แบบเลือกได้หลายรายการ)
-    if (selectedCategories.length > 0) {
-      result = result.filter((song) => selectedCategories.includes(song.category))
-    } else if (selectedCategory !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือกหมวดหมู่ในการค้นหาขั้นสูง
+    if (selectedCategory !== "all") {
       result = result.filter((song) => song.category === selectedCategory)
     }
 
-    // กรองตามภาษา (แบบเลือกได้หลายรายการ)
-    if (selectedLanguages.length > 0) {
-      result = result.filter((song) => selectedLanguages.includes(song.language))
-    } else if (selectedLanguage !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือกภาษาในการค้นหาขั้นสูง
+    if (selectedLanguage !== "all") {
       result = result.filter((song) => song.language === selectedLanguage)
     }
 
-    // กรองตาม tag (แบบเลือกได้หลายรายการ)
-    if (selectedTags.length > 0) {
-      result = result.filter((song) => song.tags && song.tags.some((tag) => selectedTags.includes(tag)))
-    } else if (selectedTag !== "all") {
-      // ใช้ตัวกรองเดิมถ้าไม่ได้เลือก tag ในการค้นหาขั้นสูง
+    if (selectedTag !== "all") {
       result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
     }
 
@@ -388,7 +370,7 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
         case "titleAsc":
           return a.title.localeCompare(b.title) // เรียงตามชื่อเพลง A-Z
         case "titleDesc":
-          return b.title.localeCompare(a.title) // เรียงตามชื่อเพลง Z-Ale) // เรียงตามชื่อเพลง Z-A
+          return b.title.localeCompare(a.title) // เรียงตามชื่อเพลง Z-A
         case "artistAsc":
           return a.artist.localeCompare(b.artist) // เรียงตามชื่อศิลปิน A-Z
         case "artistDesc":
@@ -402,17 +384,7 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
 
     setFilteredSongs(result)
     setCurrentPage(1) // Reset to first page when filters change
-  }, [
-    searchQuery,
-    selectedCategory,
-    selectedLanguage,
-    selectedTag,
-    songs,
-    selectedCategories,
-    selectedLanguages,
-    selectedTags,
-    sortOption,
-  ])
+  }, [searchQuery, selectedCategory, selectedLanguage, selectedTag, songs, sortOption])
 
   // Handle pagination
   useEffect(() => {
@@ -476,9 +448,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
     setSelectedCategory("all")
     setSelectedLanguage("all")
     setSelectedTag("all")
-    setSelectedCategories([])
-    setSelectedLanguages([])
-    setSelectedTags([])
     setSortOption("newest")
   }
 
@@ -540,14 +509,44 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
     { label: "อื่นๆ", value: "other", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" },
   ]
 
-  // ตัวเลือกสำหรับ MultiSelect
-  const multiSelectCategoryOptions = categoryOptions.map((cat) => ({ label: cat.label, value: cat.value }))
-  const multiSelectLanguageOptions = languageOptions.map((lang) => ({ label: lang.label, value: lang.value }))
-  const multiSelectTagOptions = tagOptions.slice(1).map((tag) => ({
-    label: tag.label,
-    value: tag.value,
-    color: tag.color,
-  }))
+  // ฟังก์ชันสำหรับแนะนำเพลงที่คล้ายกับคำค้นหา
+  const getSongRecommendations = () => {
+    if (!searchQuery || searchQuery.length < 2) return []
+
+    // คำนวณความคล้ายคลึงระหว่างคำค้นหากับชื่อเพลงและศิลปิน
+    const recommendations = songs.map((song) => {
+      // คำนวณคะแนนความคล้ายคลึง (ยิ่งมากยิ่งคล้าย)
+      const titleSimilarity = song.title.toLowerCase().includes(searchQuery.toLowerCase().substring(0, 3)) ? 0.5 : 0
+      const artistSimilarity = song.artist.toLowerCase().includes(searchQuery.toLowerCase().substring(0, 3)) ? 0.3 : 0
+
+      // ตรวจสอบว่ามีคำในเนื้อเพลงที่คล้ายกับคำค้นหาหรือไม่
+      const lyricsWords = song.lyrics
+        .replace(/\[.*?\]/g, "") // ลบคอร์ดในวงเล็บเหลี่ยม
+        .split(/\s+/) // แยกตามช่องว่าง
+        .filter((word) => word.length > 2) // กรองเฉพาะคำที่มีความยาวมากกว่า 2 ตัวอักษร
+
+      const hasMatchingLyrics = lyricsWords.some((word) =>
+        word.toLowerCase().includes(searchQuery.toLowerCase().substring(0, 3)),
+      )
+
+      const lyricsSimilarity = hasMatchingLyrics ? 0.2 : 0
+
+      // คะแนนรวม
+      const totalScore = titleSimilarity + artistSimilarity + lyricsSimilarity
+
+      return {
+        song,
+        score: totalScore,
+      }
+    })
+
+    // เรียงลำดับตามคะแนนความคล้ายคลึงจากมากไปน้อย และเลือกเฉพาะเพลงที่มีคะแนนมากกว่า 0
+    return recommendations
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3) // เลือกเฉพาะ 3 เพลงแรกที่มีคะแนนสูงสุด
+      .map((item) => item.song)
+  }
 
   return (
     <div className="space-y-6">
@@ -578,15 +577,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
         </div>
         <div className="flex gap-2">
           <DevModeToggle isDevMode={isDevMode} onToggle={setIsDevMode} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAdvancedSearchOpen(!isAdvancedSearchOpen)}
-            className="text-primary"
-          >
-            <SlidersHorizontal className="h-4 w-4 mr-2" />
-            ค้นหาขั้นสูง
-          </Button>
           <div className="w-full md:w-auto">
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-full md:w-[180px]">
@@ -614,83 +604,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
           </p>
         </div>
       )}
-
-      <Collapsible open={isAdvancedSearchOpen} onOpenChange={setIsAdvancedSearchOpen} className="space-y-4">
-        <CollapsibleContent className="bg-card rounded-lg shadow-sm p-4 border border-border">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-primary">ค้นหาขั้นสูง</h3>
-            <Button variant="outline" size="sm" onClick={resetFilters} className="text-primary">
-              <X className="h-4 w-4 mr-2" />
-              รีเซ็ตตัวกรอง
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-primary">หมวดหมู่ (เลือกได้หลายรายการ)</label>
-              <MultiSelect
-                options={multiSelectCategoryOptions}
-                selected={selectedCategories}
-                onChange={setSelectedCategories}
-                placeholder="เลือกหมวดหมู่..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-primary">ภาษา (เลือกได้หลายรายการ)</label>
-              <MultiSelect
-                options={multiSelectLanguageOptions}
-                selected={selectedLanguages}
-                onChange={setSelectedLanguages}
-                placeholder="เลือกภาษา..."
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-primary">แท็ก (เลือกได้หลายรายการ)</label>
-            <MultiSelect
-              options={multiSelectTagOptions}
-              selected={selectedTags}
-              onChange={setSelectedTags}
-              placeholder="เลือกแท็ก..."
-            />
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <label className="text-sm font-medium text-primary">เรียงลำดับตาม</label>
-            <Select value={sortOption} onValueChange={setSortOption}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="เลือกการเรียงลำดับ" />
-              </SelectTrigger>
-              <SelectContent>
-                {sortOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div className="flex items-center">
-                      {option.icon}
-                      {option.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="mt-4 pt-2 border-t border-border">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">พบ {filteredSongs.length} เพลงที่ตรงกับเงื่อนไข</p>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setIsAdvancedSearchOpen(false)}
-                className="bg-primary text-primary-foreground"
-              >
-                ใช้ตัวกรอง
-              </Button>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {tagOptions.map((tag) => (
@@ -768,11 +681,12 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
         </>
       ) : (
         <div className="text-center py-12 bg-card rounded-lg shadow-sm border border-border">
-          <p className="text-muted-foreground mb-2">
+          <p className="text-muted-foreground mb-4">
             ไม่พบเพลงที่ตรงกับคำค้นหา &quot;{searchQuery}&quot; ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
           </p>
+
           {suggestions.length > 0 && (
-            <div className="mt-4">
+            <div className="mb-6">
               <p className="text-sm text-muted-foreground mb-2">คุณอาจกำลังค้นหา:</p>
               <div className="flex flex-wrap justify-center gap-2">
                 {suggestions.map((suggestion) => (
@@ -788,6 +702,36 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
               </div>
             </div>
           )}
+
+          {/* แสดงเพลงแนะนำ */}
+          {getSongRecommendations().length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-medium text-primary mb-4">เพลงที่คุณอาจสนใจ</h3>
+              <div className="space-y-4 max-w-2xl mx-auto">
+                {getSongRecommendations().map((song) => (
+                  <div
+                    key={song.id}
+                    className="bg-background rounded-lg p-4 border border-border hover:border-primary transition-colors cursor-pointer"
+                    onClick={() => setSearchQuery(song.title)}
+                  >
+                    <h4 className="font-medium text-primary">{song.title}</h4>
+                    <p className="text-sm text-muted-foreground">{song.artist}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline">
+                        {song.category === "praise" ? "สรรเสริญ" : song.category === "worship" ? "นมัสการ" : "บทเพลงเปิด"}
+                      </Badge>
+                      {song.tags && song.tags.length > 0 && <Badge variant="secondary">{song.tags[0]}</Badge>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Button variant="outline" onClick={resetFilters} className="mt-6">
+            <X className="h-4 w-4 mr-2" />
+            ล้างการค้นหา
+          </Button>
         </div>
       )}
     </div>

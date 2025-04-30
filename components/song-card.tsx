@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag, Music } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Badge } from "@/components/shadcn/badge"
 import { EditSongForm } from "@/components/edit-song-form"
@@ -10,6 +10,7 @@ import { ChordToggle } from "@/components/chord-toggle"
 import { FontSizeAdjuster } from "@/components/shadcn/font-size-adjuster"
 import { formatLyricsWithFormattedChords, getFontSizeClass } from "@/utils/format-lyrics"
 import { formatDate } from "@/utils/format-date"
+import { transposeSong } from "@/utils/chord-transposer"
 import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -21,14 +22,25 @@ interface SongCardProps {
   onUpdateSong?: (song: Song) => void
   onDeleteSong?: (songId: string) => void
   onToggleChords?: (songId: string, showChords: boolean) => void
+  onToggleFavorite?: (songId: string) => void
 }
 
-const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChords }: SongCardProps): JSX.Element => {
+const SongCard = ({
+  song,
+  searchQuery,
+  onUpdateSong,
+  onDeleteSong,
+  onToggleChords,
+  onToggleFavorite,
+}: SongCardProps): JSX.Element => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const [isEditFormOpen, setIsEditFormOpen] = useState<boolean>(false)
   const [fontSize, setFontSize] = useState<string>("medium")
+  const [currentKey, setCurrentKey] = useState<string>(song.key || "C")
   const { isAdmin } = useAuth()
-  const showChords = song.showChords ?? true // ค่าเริ่มต้นคือแสดงคอร์ด
+  const showChords = song.show_chords ?? true // ค่าเริ่มต้นคือแสดงคอร์ด
+  const originalKey = song.key || "C" // คีย์เดิมของเพลง
+  const chordKeys = song.chord_keys || [originalKey] // คีย์ที่มีคอร์ด
 
   const toggleExpand = (): void => {
     setIsExpanded(!isExpanded)
@@ -42,6 +54,16 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
 
   const handleFontSizeChange = (size: string): void => {
     setFontSize(size)
+  }
+
+  const handleKeyChange = (newKey: string): void => {
+    setCurrentKey(newKey)
+  }
+
+  const handleToggleFavorite = (): void => {
+    if (onToggleFavorite) {
+      onToggleFavorite(song.id)
+    }
   }
 
   const getCategoryLabel = (category: string): string => {
@@ -162,14 +184,18 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
 
   // ฟังก์ชันสำหรับไฮไลท์คำที่ค้นหาในเนื้อเพลงที่มีคอร์ด
   const highlightLyrics = (): JSX.Element => {
-    if (!searchQuery || !song.lyrics.toLowerCase().includes(searchQuery.toLowerCase())) {
+    // เปลี่ยนคีย์เพลงถ้าจำเป็น
+    const transposedLyrics =
+      currentKey !== originalKey ? transposeSong(song.lyrics, originalKey, currentKey) : song.lyrics
+
+    if (!searchQuery || !transposedLyrics.toLowerCase().includes(searchQuery.toLowerCase())) {
       // ถ้าไม่มีคำค้นหาหรือไม่พบคำค้นหาในเนื้อเพลง ให้แสดงเนื้อเพลงปกติ
-      return formatLyricsWithFormattedChords(song.lyrics, showChords, fontSize) as JSX.Element
+      return formatLyricsWithFormattedChords(transposedLyrics, showChords, fontSize) as JSX.Element
     }
 
     // ถ้าซ่อนคอร์ด ให้ลบคอร์ดออกก่อนแล้วค่อยไฮไลท์
     if (!showChords) {
-      const lyricsWithoutChords = song.lyrics.replace(/\[.*?\]/g, "")
+      const lyricsWithoutChords = transposedLyrics.replace(/\[.*?\]/g, "")
       const lines = lyricsWithoutChords.split("\n")
 
       return (
@@ -196,7 +222,7 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
     }
 
     // ถ้าแสดงคอร์ด ต้องแยกคอร์ดออกจากเนื้อเพลงก่อนไฮไลท์
-    const lines = song.lyrics.split("\n")
+    const lines = transposedLyrics.split("\n")
 
     return (
       <div className={`font-sarabun text-gray-700 dark:text-gray-300 ${getFontSizeClass(fontSize)} leading-relaxed`}>
@@ -253,7 +279,7 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
     }
   }
 
-  const formattedDate = song.createdAt ? formatDate(song.createdAt) : "ไม่ระบุวันที่"
+  const formattedDate = song.created_at ? formatDate(song.created_at) : "ไม่ระบุวันที่"
 
   return (
     <>
@@ -279,6 +305,16 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
                     <Badge className={cn("font-normal text-xs py-0 px-1.5", getLanguageColor(song.language))}>
                       <Globe className="h-2.5 w-2.5 mr-1" />
                       {getLanguageLabel(song.language)}
+                    </Badge>
+                  </div>
+                )}
+
+                {/* แสดงคีย์ */}
+                {song.key && (
+                  <div className="flex items-center text-xs">
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 font-normal text-xs py-0 px-1.5">
+                      <Music className="h-2.5 w-2.5 mr-1" />
+                      คีย์ {song.key}
                     </Badge>
                   </div>
                 )}
@@ -334,7 +370,32 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
           <div className="px-4 pb-4 pt-0">
             <div className="border-t border-blue-50 dark:border-blue-900 pt-3 mt-1">
               <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
-                <FontSizeAdjuster onSizeChange={handleFontSizeChange} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <FontSizeAdjuster onSizeChange={handleFontSizeChange} />
+
+                  {/* แสดงคีย์ที่มีคอร์ด */}
+                  {chordKeys && chordKeys.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">คีย์:</span>
+                      <div className="flex gap-1">
+                        {chordKeys.map((key) => (
+                          <Badge
+                            key={key}
+                            className={cn(
+                              "cursor-pointer text-xs",
+                              key === currentKey
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                                : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
+                            )}
+                            onClick={() => handleKeyChange(key)}
+                          >
+                            {key}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <ChordToggle showChords={showChords} onToggle={handleToggleChords} />
               </div>
               {highlightLyrics()}

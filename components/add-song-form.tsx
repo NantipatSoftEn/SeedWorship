@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { X, FileText } from "lucide-react"
+import { X, FileText, Music, Info } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Input } from "@/components/shadcn/input"
 import { Textarea } from "@/components/shadcn/textarea"
@@ -14,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChordExample } from "@/components/shadcn/chord-example"
 import { LyricsPreview } from "@/components/shadcn/lyrics-preview"
 import { ChordConverter } from "@/components/shadcn/chord-converter"
+import { ChordDetector } from "@/components/shadcn/chord-detector"
 import { TagSelector } from "@/components/shadcn/tag-selector"
 import { useToast } from "@/hooks/use-toast"
 import { autoConvertChordFormat } from "@/utils/chord-formatter"
+import { getAllKeys } from "@/utils/chord-transposer"
 import type { Song, SongTag } from "@/types/song"
 
 // Define the form schema with validation
@@ -29,6 +31,7 @@ const formSchema = z.object({
   language: z.enum(["thai", "english", "other"], {
     required_error: "กรุณาเลือกภาษา",
   }),
+  key: z.string().optional(),
   tags: z.array(z.string()).optional(),
   lyrics: z.string().min(1, "กรุณาระบุเนื้อเพลง"),
 })
@@ -44,8 +47,10 @@ interface AddSongFormProps {
 export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): JSX.Element => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false)
+  const [keysWithChords, setKeysWithChords] = useState<Record<string, string[]>>({})
   const { toast } = useToast()
   const lyricsTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const allKeys = getAllKeys()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -54,6 +59,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
       artist: "",
       category: undefined,
       language: "thai", // ค่าเริ่มต้นเป็นภาษาไทย
+      key: "C", // ค่าเริ่มต้นเป็นคีย์ C
       tags: [],
       lyrics: "",
     },
@@ -81,10 +87,12 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
         artist: values.artist,
         category: values.category,
         language: values.language, // เพิ่มภาษา
+        key: values.key, // เพิ่มคีย์
         tags: values.tags as SongTag[], // เพิ่ม tags
         lyrics: formattedLyrics, // ใช้เนื้อเพลงที่แปลงรูปแบบคอร์ดแล้ว
-        showChords: true, // เพิ่มค่าเริ่มต้นให้แสดงคอร์ด
-        createdAt, // เพิ่มวันที่ที่เพิ่มเพลง
+        show_chords: true, // เพิ่มค่าเริ่มต้นให้แสดงคอร์ด
+        created_at: createdAt, // เพิ่มวันที่ที่เพิ่มเพลง
+        chord_keys: Object.keys(keysWithChords), // เพิ่มรายการคีย์ที่มีคอร์ด
       }
 
       console.log("New song created:", newSong)
@@ -102,6 +110,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
 
       // Reset form and close modal
       form.reset()
+      setKeysWithChords({})
       onClose()
     } catch (error) {
       console.error("Error adding song:", error)
@@ -117,6 +126,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
 
   const handleClose = (): void => {
     form.reset()
+    setKeysWithChords({})
     onClose()
   }
 
@@ -125,14 +135,20 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
     form.setValue("lyrics", convertedLyrics, { shouldValidate: true, shouldDirty: true })
   }
 
+  // ฟังก์ชันสำหรับเปลี่ยนคีย์
+  const handleKeyChange = (newKey: string): void => {
+    form.setValue("key", newKey, { shouldValidate: true, shouldDirty: true })
+  }
+
   const lyrics = form.watch("lyrics")
   const selectedLanguage = form.watch("language")
+  const selectedKey = form.watch("key") || "C"
   const selectedTags = form.watch("tags") || []
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[600px] bg-white dark:bg-gray-800">
+        <DialogContent className="sm:max-w-[700px] bg-white dark:bg-gray-800">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-blue-900 dark:text-blue-300">เพิ่มเพลงใหม่</DialogTitle>
             <Button
@@ -186,7 +202,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="category"
@@ -262,6 +278,39 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
                     </FormItem>
                   )}
                 />
+
+                {/* เพิ่มฟิลด์คีย์ */}
+                <FormField
+                  control={form.control}
+                  name="key"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-blue-900 dark:text-blue-300 flex items-center">
+                        <Music className="h-4 w-4 mr-1" />
+                        คีย์เพลงหลัก
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || "C"}>
+                        <FormControl>
+                          <SelectTrigger className="border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <SelectValue placeholder="เลือกคีย์" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
+                          {allKeys.map((key) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              className="text-gray-900 dark:text-gray-100 focus:bg-blue-50 dark:focus:bg-blue-900"
+                            >
+                              {key}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage className="text-red-500 dark:text-red-400" />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               {/* เปลี่ยนจาก MultiSelect เป็น TagSelector */}
@@ -296,7 +345,6 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
                           <FileText className="h-4 w-4 mr-1" />
                           แปลงรูปแบบคอร์ด
                         </Button>
-                        {/* ลบปุ่มเพิ่มคอร์ด (ChordHelper) ออก */}
                       </div>
                     </div>
                     <FormControl>
@@ -307,12 +355,39 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
                         className="min-h-[150px] border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-sarabun"
                       />
                     </FormControl>
+
+                    {/* เพิ่มส่วนแสดงคอร์ดที่ตรวจพบ */}
+                    {lyrics && (
+                      <ChordDetector
+                        lyrics={lyrics}
+                        currentKey={selectedKey}
+                        onKeyChange={handleKeyChange}
+                        className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md"
+                      />
+                    )}
+
                     <ChordExample className="mt-2" />
                     {lyrics && <LyricsPreview lyrics={lyrics} className="mt-4" />}
                     <FormMessage className="text-red-500 dark:text-red-400" />
                   </FormItem>
                 )}
               />
+
+              <div className="bg-amber-50 dark:bg-amber-900/30 p-3 rounded-md border border-amber-100 dark:border-amber-800/50">
+                <div className="flex items-start gap-2">
+                  <Info className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-amber-700 dark:text-amber-400">
+                    <p className="font-medium mb-1">คำแนะนำในการเพิ่มคอร์ด:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>เพิ่มคอร์ดในวงเล็บเหลี่ยม เช่น [C], [G], [Am]</li>
+                      <li>วางคอร์ดไว้ก่อนคำที่ต้องการให้เล่นคอร์ดนั้น</li>
+                      <li>ระบบจะวิเคราะห์คีย์เพลงจากคอร์ดที่คุณใส่</li>
+                      <li>คุณสามารถเพิ่มคีย์ได้หลายคีย์ และเลือกคีย์หลักที่ต้องการ</li>
+                      <li>คอร์ดจะถูกปรับอัตโนมัติเมื่อเปลี่ยนคีย์ตอนแสดงผล</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
 
               <DialogFooter className="pt-4">
                 <Button
