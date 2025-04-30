@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { JSX, useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/shadcn/button"

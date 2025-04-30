@@ -23,7 +23,19 @@ import { SongListSkeleton } from "@/components/skeletons/song-list-skeleton"
 import { AddSongButton } from "@/components/add-song-button"
 import SongCard from "@/components/song-card"
 import { useToast } from "@/hooks/use-toast"
-import type { Song, SongTag } from "@/types/song"
+import type { Song } from "@/types/song"
+
+// Define SongTag type if it's not properly imported
+type SongTag = 
+  | "slow" 
+  | "fast" 
+  | "medium" 
+  | "acoustic" 
+  | "electronic" 
+  | "hymn" 
+  | "contemporary" 
+  | "kids" 
+  | "other";
 
 const ITEMS_PER_PAGE = 10 // จำนวนเพลงต่อหน้า
 
@@ -312,23 +324,25 @@ export default function SongList() {
 
     // กรองตาม tag (แบบเลือกได้หลายรายการ)
     if (selectedTags.length > 0) {
-      result = result.filter((song) => song.tags && song.tags.some((tag) => selectedTags.includes(tag)))
+      result = result.filter((song) => song.tags?.some((tag) => selectedTags.includes(tag)))
     } else if (selectedTag !== "all") {
       // ใช้ตัวกรองเดิมถ้าไม่ได้เลือก tag ในการค้นหาขั้นสูง
-      result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
+      result = result.filter((song) => song.tags?.includes(selectedTag as SongTag))
     }
 
     // เรียงลำดับเพลงตามตัวเลือกการเรียงลำดับ
     result = [...result].sort((a, b) => {
       switch (sortOption) {
-        case "newest":
+        case "newest": {
           const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateB - dateA // เรียงจากใหม่ไปเก่า
-        case "oldest":
+        }
+        case "oldest": {
           const dateC = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateD = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateC - dateD // เรียงจากเก่าไปใหม่
+        }
         case "titleAsc":
           return a.title.localeCompare(b.title) // เรียงตามชื่อเพลง A-Z
         case "titleDesc":
@@ -337,10 +351,11 @@ export default function SongList() {
           return a.artist.localeCompare(b.artist) // เรียงตามชื่อศิลปิน A-Z
         case "artistDesc":
           return b.artist.localeCompare(a.artist) // เรียงตามชื่อศิลปิน Z-A
-        default:
+        default: {
           const dateE = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateF = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateF - dateE // เรียงจากใหม่ไปเก่า (ค่าเริ่มต้น)
+        }
       }
     })
 
@@ -666,20 +681,25 @@ export default function SongList() {
             <Pagination className="mt-6">
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
-                  />
+                  {currentPage === 1 ? (
+                    <PaginationPrevious
+                      className="opacity-50 cursor-not-allowed"
+                      aria-disabled="true"
+                    />
+                  ) : (
+                    <PaginationPrevious
+                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    />
+                  )}
                 </PaginationItem>
 
-                {getPageNumbers().map((pageNumber, index) =>
+                {getPageNumbers().map((pageNumber) =>
                   pageNumber === "ellipsis" ? (
-                    <PaginationItem key={`ellipsis-${index}`}>
+                    <PaginationItem key={`ellipsis-${String(pageNumber)}`}>
                       <PaginationEllipsis />
                     </PaginationItem>
                   ) : (
-                    <PaginationItem key={pageNumber}>
+                    <PaginationItem key={String(pageNumber)}>
                       <PaginationLink
                         isActive={currentPage === pageNumber}
                         onClick={() => setCurrentPage(pageNumber as number)}
@@ -691,11 +711,16 @@ export default function SongList() {
                 )}
 
                 <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className={currentPage === totalPages ? "opacity-50 cursor-not-allowed" : ""}
-                  />
+                  {currentPage === totalPages ? (
+                    <PaginationNext
+                      className="opacity-50 cursor-not-allowed"
+                      aria-disabled="true"
+                    />
+                  ) : (
+                    <PaginationNext
+                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    />
+                  )}
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
