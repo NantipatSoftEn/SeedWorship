@@ -17,8 +17,20 @@ export interface Song {
   artist: string
   category: string
   lyrics: string
-  language: SongLanguage // เพิ่มฟิลด์ภาษา
-  tags?: SongTag[] // เพิ่มฟิลด์ tags สำหรับระบุแนวเพลง
-  showChords?: boolean // เพิ่มตัวเลือกสำหรับแสดง/ซ่อนคอร์ด
-  createdAt: string // เพิ่มวันที่ที่เพิ่มเพลง
+  language: SongLanguage
+  tags?: SongTag[]
+  show_chords?: boolean
+  created_at: string
+  updated_at?: string
+  user_id?: string | null
+  is_favorite?: boolean
+}
+
+export interface SongFormData {
+  title: string
+  artist: string
+  category: SongCategory
+  language: SongLanguage
+  tags?: SongTag[]
+  lyrics: string
 }

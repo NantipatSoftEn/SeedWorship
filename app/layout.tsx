@@ -3,7 +3,8 @@ import { Sarabun } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/shadcn/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
-import type React from "react"
+import { SupabaseAuthProvider } from "@/components/providers/supabase-auth-provider"
+import type { ReactNode } from "react"
 
 const sarabun = Sarabun({
   subsets: ["latin", "thai"],
@@ -20,14 +21,16 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: ReactNode
 }): JSX.Element {
   return (
     <html lang="th" suppressHydrationWarning>
       <body className={sarabun.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-          <Toaster />
+          <SupabaseAuthProvider>
+            {children}
+            <Toaster />
+          </SupabaseAuthProvider>
         </ThemeProvider>
       </body>
     </html>

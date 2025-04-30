@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag, Heart } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Badge } from "@/components/shadcn/badge"
 import { EditSongForm } from "@/components/edit-song-form"
@@ -12,7 +12,7 @@ import { formatLyricsWithFormattedChords, getFontSizeClass } from "@/utils/forma
 import { formatDate } from "@/utils/format-date"
 import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 import { cn } from "@/lib/utils"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/components/providers/supabase-auth-provider"
 import React from "react"
 
 interface SongCardProps {
@@ -21,14 +21,23 @@ interface SongCardProps {
   onUpdateSong?: (song: Song) => void
   onDeleteSong?: (songId: string) => void
   onToggleChords?: (songId: string, showChords: boolean) => void
+  onToggleFavorite?: (songId: string) => void
 }
 
-const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChords }: SongCardProps): JSX.Element => {
+const SongCard = ({
+  song,
+  searchQuery,
+  onUpdateSong,
+  onDeleteSong,
+  onToggleChords,
+  onToggleFavorite,
+}: SongCardProps): JSX.Element => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const [isEditFormOpen, setIsEditFormOpen] = useState<boolean>(false)
   const [fontSize, setFontSize] = useState<string>("medium")
-  const { isAdmin } = useAuth()
+  const { user } = useAuth()
   const showChords = song.showChords ?? true // ค่าเริ่มต้นคือแสดงคอร์ด
+  const isAdmin = user?.role === "admin"
 
   const toggleExpand = (): void => {
     setIsExpanded(!isExpanded)
@@ -37,6 +46,12 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
   const handleToggleChords = (): void => {
     if (onToggleChords) {
       onToggleChords(song.id, !showChords)
+    }
+  }
+
+  const handleToggleFavorite = (): void => {
+    if (onToggleFavorite) {
+      onToggleFavorite(song.id)
     }
   }
 
@@ -316,6 +331,15 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
                   <DeleteSongDialog song={song} onDeleteSong={handleSongDelete} />
                 </>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-full text-gray-500 dark:text-gray-400"
+                onClick={handleToggleFavorite}
+                aria-label="เพิ่มเพลงโปรด"
+              >
+                <Heart className="h-4 w-4" />
+              </Button>
 
               <Button
                 variant="ghost"
