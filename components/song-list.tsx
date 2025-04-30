@@ -21,21 +21,11 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { SearchSuggestions } from "@/components/search-suggestions"
 import { SongListSkeleton } from "@/components/skeletons/song-list-skeleton"
 import { AddSongButton } from "@/components/add-song-button"
+import { DevModeToggle } from "@/components/dev-mode-toggle"
 import SongCard from "@/components/song-card"
 import { useToast } from "@/hooks/use-toast"
-import type { Song } from "@/types/song"
-
-// Define SongTag type if it's not properly imported
-type SongTag = 
-  | "slow" 
-  | "fast" 
-  | "medium" 
-  | "acoustic" 
-  | "electronic" 
-  | "hymn" 
-  | "contemporary" 
-  | "kids" 
-  | "other";
+import { mockSongs } from "@/lib/mock-data"
+import type { Song, SongTag } from "@/types/song"
 
 const ITEMS_PER_PAGE = 10 // จำนวนเพลงต่อหน้า
 
@@ -46,18 +36,23 @@ const categories = [
   { label: "บทเพลงเปิด", value: "opening" },
 ]
 
-export default function SongList() {
-  const [songs, setSongs] = useState<Song[]>([])
+interface SongListProps {
+  initialSongs?: Song[]
+}
+
+export default function SongList({ initialSongs = [] }: SongListProps) {
+  const [songs, setSongs] = useState<Song[]>(initialSongs)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedLanguage, setSelectedLanguage] = useState<string>("all")
   const [selectedTag, setSelectedTag] = useState<string>("all")
-  const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
+  const [filteredSongs, setFilteredSongs] = useState<Song[]>(initialSongs)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [paginatedSongs, setPaginatedSongs] = useState<Song[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoading, setIsLoading] = useState<boolean>(initialSongs.length === 0)
+  const [isDevMode, setIsDevMode] = useState<boolean>(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -72,6 +67,13 @@ export default function SongList() {
   const fetchSongs = async () => {
     try {
       setIsLoading(true)
+
+      // ถ้าอยู่ในโหมด Dev Mode ให้ใช้ข้อมูลจำลอง
+      if (isDevMode) {
+        setSongs(mockSongs)
+        setIsLoading(false)
+        return
+      }
 
       // ดึงข้อมูลผู้ใช้ปัจจุบัน
       const {
@@ -142,9 +144,21 @@ export default function SongList() {
     }
   }
 
+  // เมื่อ isDevMode เปลี่ยน ให้ดึงข้อมูลใหม่
   useEffect(() => {
     fetchSongs()
-  }, [])
+  }, [isDevMode])
+
+  useEffect(() => {
+    // ถ้ามี initialSongs ให้ใช้ initialSongs เป็นค่าเริ่มต้น
+    if (initialSongs.length > 0 && !isDevMode) {
+      setSongs(initialSongs)
+      setIsLoading(false)
+    } else {
+      // ถ้าไม่มี initialSongs หรืออยู่ในโหมด Dev Mode ให้ดึงข้อมูลใหม่
+      fetchSongs()
+    }
+  }, [initialSongs])
 
   // Function to update a song
   const updateSong = (updatedSong: Song) => {
@@ -159,6 +173,16 @@ export default function SongList() {
   // Function to delete a song
   const deleteSong = async (songId: string) => {
     try {
+      // ถ้าอยู่ในโหมด Dev Mode ให้ลบเฉพาะใน state
+      if (isDevMode) {
+        setSongs((prevSongs) => prevSongs.filter((song) => song.id !== songId))
+        toast({
+          title: "ลบเพลงสำเร็จ (Dev Mode)",
+          description: "ลบเพลงเรียบร้อยแล้ว (ข้อมูลจำลอง)",
+        })
+        return
+      }
+
       const { error } = await supabase.from("songs").delete().eq("id", songId)
 
       if (error) throw error
@@ -182,6 +206,14 @@ export default function SongList() {
   // Function to toggle chord visibility
   const handleToggleChords = async (songId: string, showChords: boolean) => {
     try {
+      // ถ้าอยู่ในโหมด Dev Mode ให้อัปเดตเฉพาะใน state
+      if (isDevMode) {
+        setSongs((prevSongs) =>
+          prevSongs.map((song) => (song.id === songId ? { ...song, show_chords: showChords } : song)),
+        )
+        return
+      }
+
       const { error } = await supabase.from("songs").update({ show_chords: showChords }).eq("id", songId)
 
       if (error) throw error
@@ -202,6 +234,18 @@ export default function SongList() {
   // Function to toggle favorite
   const handleToggleFavorite = async (songId: string) => {
     try {
+      // ถ้าอยู่ในโหมด Dev Mode ให้อัปเดตเฉพาะใน state
+      if (isDevMode) {
+        setSongs((prevSongs) =>
+          prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: !song.is_favorite } : song)),
+        )
+        toast({
+          title: (song) => (song.is_favorite ? "ลบออกจากเพลงโปรดแล้ว (Dev Mode)" : "เพิ่มเข้าเพลงโปรดแล้ว (Dev Mode)"),
+          description: "อัปเดตเพลงโปรดเรียบร้อยแล้ว (ข้อมูลจำลอง)",
+        })
+        return
+      }
+
       // ดึงข้อมูลผู้ใช้ปัจจุบัน
       const {
         data: { user },
@@ -324,25 +368,23 @@ export default function SongList() {
 
     // กรองตาม tag (แบบเลือกได้หลายรายการ)
     if (selectedTags.length > 0) {
-      result = result.filter((song) => song.tags?.some((tag) => selectedTags.includes(tag)))
+      result = result.filter((song) => song.tags && song.tags.some((tag) => selectedTags.includes(tag)))
     } else if (selectedTag !== "all") {
       // ใช้ตัวกรองเดิมถ้าไม่ได้เลือก tag ในการค้นหาขั้นสูง
-      result = result.filter((song) => song.tags?.includes(selectedTag as SongTag))
+      result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
     }
 
     // เรียงลำดับเพลงตามตัวเลือกการเรียงลำดับ
     result = [...result].sort((a, b) => {
       switch (sortOption) {
-        case "newest": {
+        case "newest":
           const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateB - dateA // เรียงจากใหม่ไปเก่า
-        }
-        case "oldest": {
+        case "oldest":
           const dateC = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateD = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateC - dateD // เรียงจากเก่าไปใหม่
-        }
         case "titleAsc":
           return a.title.localeCompare(b.title) // เรียงตามชื่อเพลง A-Z
         case "titleDesc":
@@ -351,11 +393,10 @@ export default function SongList() {
           return a.artist.localeCompare(b.artist) // เรียงตามชื่อศิลปิน A-Z
         case "artistDesc":
           return b.artist.localeCompare(a.artist) // เรียงตามชื่อศิลปิน Z-A
-        default: {
+        default:
           const dateE = a.created_at ? new Date(a.created_at).getTime() : 0
           const dateF = b.created_at ? new Date(b.created_at).getTime() : 0
           return dateF - dateE // เรียงจากใหม่ไปเก่า (ค่าเริ่มต้น)
-        }
       }
     })
 
@@ -536,6 +577,7 @@ export default function SongList() {
           />
         </div>
         <div className="flex gap-2">
+          <DevModeToggle isDevMode={isDevMode} onToggle={setIsDevMode} />
           <Button
             variant="outline"
             size="sm"
@@ -564,6 +606,14 @@ export default function SongList() {
           <AddSongButton className="hidden md:flex" onAddSong={addSong} />
         </div>
       </div>
+
+      {isDevMode && (
+        <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
+          <p className="text-amber-800 dark:text-amber-300 text-sm font-medium">
+            โหมดนักพัฒนา: กำลังใช้ข้อมูลจำลอง (Mock Data) จำนวน {mockSongs.length} เพลง
+          </p>
+        </div>
+      )}
 
       <Collapsible open={isAdvancedSearchOpen} onOpenChange={setIsAdvancedSearchOpen} className="space-y-4">
         <CollapsibleContent className="bg-card rounded-lg shadow-sm p-4 border border-border">
@@ -681,25 +731,20 @@ export default function SongList() {
             <Pagination className="mt-6">
               <PaginationContent>
                 <PaginationItem>
-                  {currentPage === 1 ? (
-                    <PaginationPrevious
-                      className="opacity-50 cursor-not-allowed"
-                      aria-disabled="true"
-                    />
-                  ) : (
-                    <PaginationPrevious
-                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    />
-                  )}
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
+                  />
                 </PaginationItem>
 
-                {getPageNumbers().map((pageNumber) =>
+                {getPageNumbers().map((pageNumber, index) =>
                   pageNumber === "ellipsis" ? (
-                    <PaginationItem key={`ellipsis-${String(pageNumber)}`}>
+                    <PaginationItem key={`ellipsis-${index}`}>
                       <PaginationEllipsis />
                     </PaginationItem>
                   ) : (
-                    <PaginationItem key={String(pageNumber)}>
+                    <PaginationItem key={pageNumber}>
                       <PaginationLink
                         isActive={currentPage === pageNumber}
                         onClick={() => setCurrentPage(pageNumber as number)}
@@ -711,16 +756,11 @@ export default function SongList() {
                 )}
 
                 <PaginationItem>
-                  {currentPage === totalPages ? (
-                    <PaginationNext
-                      className="opacity-50 cursor-not-allowed"
-                      aria-disabled="true"
-                    />
-                  ) : (
-                    <PaginationNext
-                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    />
-                  )}
+                  <PaginationNext
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className={currentPage === totalPages ? "opacity-50 cursor-not-allowed" : ""}
+                  />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
