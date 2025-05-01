@@ -1,14 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag, Music } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Badge } from "@/components/shadcn/badge"
 import { EditSongForm } from "@/components/edit-song-form"
 import { DeleteSongDialog } from "@/components/delete-song-dialog"
 import { ChordToggle } from "@/components/chord-toggle"
 import { FontSizeAdjuster } from "@/components/shadcn/font-size-adjuster"
-import { KeySelector } from "@/components/shadcn/key-selector"
 import { formatLyricsWithFormattedChords, getFontSizeClass } from "@/utils/format-lyrics"
 import { formatDate } from "@/utils/format-date"
 import { transposeSong } from "@/utils/chord-transposer"
@@ -16,6 +15,9 @@ import type { Song, SongCategory, SongLanguage, SongTag } from "@/types/song"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import React from "react"
+
+// เพิ่มการนำเข้า getSongKeys และ getSongPrimaryKey
+import { getSongKeys, getSongPrimaryKey, type SongKey } from "@/lib/services/song-key-service"
 
 interface SongCardProps {
   song: Song
@@ -33,6 +35,11 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
   const { isAdmin } = useAuth()
   const showChords = song.show_chords ?? true // ค่าเริ่มต้นคือแสดงคอร์ด
   const originalKey = song.key || "C" // คีย์เดิมของเพลง
+
+  // เพิ่ม state สำหรับเก็บข้อมูลคีย์
+  const [songKeys, setSongKeys] = useState<SongKey[]>([])
+  const [primaryKey, setPrimaryKey] = useState<SongKey | null>(null)
+  const [isLoadingKeys, setIsLoadingKeys] = useState<boolean>(false)
 
   const toggleExpand = (): void => {
     setIsExpanded(!isExpanded)
@@ -267,6 +274,30 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
 
   const formattedDate = song.created_at ? formatDate(song.created_at) : "ไม่ระบุวันที่"
 
+  // เพิ่มฟังก์ชันสำหรับโหลดข้อมูลคีย์
+  const loadSongKeys = async () => {
+    if (!isExpanded) return
+
+    try {
+      setIsLoadingKeys(true)
+      const [keysData, primaryKeyData] = await Promise.all([getSongKeys(song.id), getSongPrimaryKey(song.id)])
+
+      setSongKeys(keysData)
+      setPrimaryKey(primaryKeyData)
+    } catch (error) {
+      console.error("Error loading song keys:", error)
+    } finally {
+      setIsLoadingKeys(false)
+    }
+  }
+
+  // เรียกใช้ฟังก์ชัน loadSongKeys เมื่อ isExpanded เปลี่ยนแปลง
+  useEffect(() => {
+    if (isExpanded) {
+      loadSongKeys()
+    }
+  }, [isExpanded, song.id])
+
   return (
     <>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-blue-50 dark:border-blue-900 transition-all hover:shadow-md">
@@ -345,11 +376,40 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
         {isExpanded && (
           <div className="px-4 pb-4 pt-0">
             <div className="border-t border-blue-50 dark:border-blue-900 pt-3 mt-1">
+              {/* แสดงคีย์ของเพลง */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                  <Music className="h-3 w-3 mr-1" />
+                  คีย์:
+                </span>
+
+                {isLoadingKeys ? (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">กำลังโหลด...</span>
+                ) : songKeys.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {songKeys.map((key) => (
+                      <Badge
+                        key={key.id}
+                        className={cn(
+                          primaryKey?.id === key.id
+                            ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                            : "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+                        )}
+                      >
+                        {key.key_name}
+                        {primaryKey?.id === key.id && " (หลัก)"}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">ไม่มีคีย์ที่กำหนด</span>
+                )}
+              </div>
+
               <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <FontSizeAdjuster onSizeChange={handleFontSizeChange} />
-                  {/* เพิ่มตัวเลือกเปลี่ยนคีย์ */}
-                  <KeySelector currentKey={currentKey} originalKey={originalKey} onKeyChange={handleKeyChange} />
+                  {/* เอาส่วนของ KeySelector ออก เพราะเราใช้ SongKeyManager แทน */}
                 </div>
                 <ChordToggle showChords={showChords} onToggle={handleToggleChords} />
               </div>

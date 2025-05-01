@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { X, FileText, Music, Info } from "lucide-react"
+import { X, FileText, Info } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Input } from "@/components/shadcn/input"
 import { Textarea } from "@/components/shadcn/textarea"
@@ -16,6 +16,7 @@ import { LyricsPreview } from "@/components/shadcn/lyrics-preview"
 import { ChordConverter } from "@/components/shadcn/chord-converter"
 import { ChordDetector } from "@/components/shadcn/chord-detector"
 import { TagSelector } from "@/components/shadcn/tag-selector"
+import { SongKeyManager } from "@/components/shadcn/song-key-manager"
 import { useToast } from "@/hooks/use-toast"
 import { autoConvertChordFormat } from "@/utils/chord-formatter"
 import { getAllKeys } from "@/utils/chord-transposer"
@@ -31,7 +32,6 @@ const formSchema = z.object({
   language: z.enum(["thai", "english", "other"], {
     required_error: "กรุณาเลือกภาษา",
   }),
-  key: z.string().optional(),
   tags: z.array(z.string()).optional(),
   lyrics: z.string().min(1, "กรุณาระบุเนื้อเพลง"),
 })
@@ -59,7 +59,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       artist: song.artist,
       category: song.category as "praise" | "worship" | "opening",
       language: song.language || "thai", // ใช้ค่าที่มีอยู่หรือค่าเริ่มต้นเป็นภาษาไทย
-      key: song.key || "C", // ใช้ค่าที่มีอยู่หรือค่าเริ่มต้นเป็นคีย์ C
       tags: song.tags || [], // ใช้ค่าที่มีอยู่หรือค่าเริ่มต้นเป็นอาร์เรย์ว่าง
       lyrics: song.lyrics,
     },
@@ -84,7 +83,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
         artist: values.artist,
         category: values.category,
         language: values.language, // อัปเดตภาษา
-        key: values.key, // อัปเดตคีย์
         tags: values.tags as SongTag[], // อัปเดต tags
         lyrics: formattedLyrics, // ใช้เนื้อเพลงที่แปลงรูปแบบคอร์ดแล้ว
         show_chords: song.show_chords ?? true, // รักษาค่าเดิม หรือตั้งค่าเริ่มต้นเป็น true
@@ -124,7 +122,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       artist: song.artist,
       category: song.category as "praise" | "worship" | "opening",
       language: song.language || "thai",
-      key: song.key || "C",
       tags: song.tags || [],
       lyrics: song.lyrics,
     })
@@ -138,12 +135,11 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
 
   // ฟังก์ชันสำหรับเปลี่ยนคีย์
   const handleKeyChange = (newKey: string): void => {
-    form.setValue("key", newKey, { shouldValidate: true, shouldDirty: true })
+    // ไม่ต้องใช้ฟังก์ชันนี้แล้ว เพราะเราใช้ SongKeyManager แทน
   }
 
   const lyrics = form.watch("lyrics")
   const selectedLanguage = form.watch("language")
-  const selectedKey = form.watch("key") || "C"
   const selectedTags = form.watch("tags") || []
 
   return (
@@ -203,7 +199,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="category"
@@ -279,39 +275,12 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                     </FormItem>
                   )}
                 />
+              </div>
 
-                {/* เพิ่มฟิลด์คีย์ */}
-                <FormField
-                  control={form.control}
-                  name="key"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-blue-900 dark:text-blue-300 flex items-center">
-                        <Music className="h-4 w-4 mr-1" />
-                        คีย์เพลง
-                      </FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value || "C"}>
-                        <FormControl>
-                          <SelectTrigger className="border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                            <SelectValue placeholder="เลือกคีย์" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800">
-                          {allKeys.map((key) => (
-                            <SelectItem
-                              key={key}
-                              value={key}
-                              className="text-gray-900 dark:text-gray-100 focus:bg-blue-50 dark:focus:bg-blue-900"
-                            >
-                              {key}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage className="text-red-500 dark:text-red-400" />
-                    </FormItem>
-                  )}
-                />
+              {/* เพิ่ม SongKeyManager */}
+              <div className="border border-blue-100 dark:border-blue-800 rounded-md p-4 bg-blue-50/50 dark:bg-blue-900/20">
+                <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-3">จัดการคีย์เพลง</h3>
+                <SongKeyManager songId={song.id} />
               </div>
 
               {/* เปลี่ยนจาก MultiSelect เป็น TagSelector */}
@@ -361,8 +330,8 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                     {lyrics && (
                       <ChordDetector
                         lyrics={lyrics}
-                        currentKey={selectedKey}
-                        onKeyChange={handleKeyChange}
+                        currentKey=""
+                        onKeyChange={() => {}}
                         className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md"
                       />
                     )}
@@ -383,7 +352,8 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                       <li>เพิ่มคอร์ดในวงเล็บเหลี่ยม เช่น [C], [G], [Am]</li>
                       <li>วางคอร์ดไว้ก่อนคำที่ต้องการให้เล่นคอร์ดนั้น</li>
                       <li>ระบบจะวิเคราะห์คีย์เพลงจากคอร์ดที่คุณใส่</li>
-                      <li>คุณสามารถเปลี่ยนคีย์ได้ตามต้องการ โดยคอร์ดจะถูกปรับอัตโนมัติเมื่อแสดงผล</li>
+                      <li>คุณสามารถเพิ่มคีย์ได้หลายคีย์ และเลือกคีย์หลักที่ต้องการ</li>
+                      <li>คอร์ดจะถูกปรับอัตโนมัติเมื่อเปลี่ยนคีย์ตอนแสดงผล</li>
                     </ul>
                   </div>
                 </div>

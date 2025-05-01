@@ -6,90 +6,87 @@ export interface Database {
       songs: {
         Row: {
           id: string
-          title: string
-          artist: string
-          category: string
-          language: string
-          lyrics: string
-          tags: string[] | null
-          show_chords: boolean
-          user_id: string | null
           created_at: string
           updated_at: string
-          key: string | null // เพิ่มฟิลด์คีย์
-        }
-        Insert: {
-          id?: string
           title: string
-          artist: string
-          category: string
-          language: string
-          lyrics: string
-          tags?: string[] | null
-          show_chords?: boolean
-          user_id?: string | null
+          artist: string | null
+          lyrics: string | null
+          chords: string | null
+          primary_key_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
           created_at?: string
           updated_at?: string
-          key?: string | null // เพิ่มฟิลด์คีย์
+          title: string
+          artist?: string | null
+          lyrics?: string | null
+          chords?: string | null
+          primary_key_id?: string | null
+          user_id?: string | null
         }
         Update: {
           id?: string
+          created_at?: string
+          updated_at?: string
           title?: string
-          artist?: string
-          category?: string
-          language?: string
-          lyrics?: string
-          tags?: string[] | null
-          show_chords?: boolean
+          artist?: string | null
+          lyrics?: string | null
+          chords?: string | null
+          primary_key_id?: string | null
           user_id?: string | null
-          created_at?: string
-          updated_at?: string
-          key?: string | null // เพิ่มฟิลด์คีย์
         }
       }
-      profiles: {
+      song_keys: {
         Row: {
           id: string
-          username: string | null
-          display_name: string | null
-          avatar_url: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id: string
-          username?: string | null
-          display_name?: string | null
-          avatar_url?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          username?: string | null
-          display_name?: string | null
-          avatar_url?: string | null
-          updated_at?: string | null
-        }
-      }
-      favorites: {
-        Row: {
-          id: string
-          user_id: string
-          song_id: string
           created_at: string
+          key_name: string
+          description: string | null
         }
         Insert: {
           id?: string
-          user_id: string
-          song_id: string
           created_at?: string
+          key_name: string
+          description?: string | null
         }
         Update: {
           id?: string
-          user_id?: string
-          song_id?: string
           created_at?: string
+          key_name?: string
+          description?: string | null
         }
       }
+      song_to_keys: {
+        Row: {
+          id: string
+          created_at: string
+          song_id: string
+          key_id: string
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          song_id: string
+          key_id: string
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          song_id?: string
+          key_id?: string
+        }
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
     }
   }
 }

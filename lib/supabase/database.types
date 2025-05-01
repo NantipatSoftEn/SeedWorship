@@ -1,4 +1,10 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export interface Database {
   public: {
@@ -16,7 +22,7 @@ export interface Database {
           user_id: string | null
           created_at: string
           updated_at: string
-          key: string | null // เพิ่มฟิลด์คีย์
+          primary_key_id: string | null
         }
         Insert: {
           id?: string
@@ -25,12 +31,12 @@ export interface Database {
           category: string
           language: string
           lyrics: string
-          tags?: string[] | null
+          tags: string[] | null
           show_chords?: boolean
           user_id?: string | null
           created_at?: string
           updated_at?: string
-          key?: string | null // เพิ่มฟิลด์คีย์
+          primary_key_id?: string | null
         }
         Update: {
           id?: string
@@ -44,7 +50,44 @@ export interface Database {
           user_id?: string | null
           created_at?: string
           updated_at?: string
-          key?: string | null // เพิ่มฟิลด์คีย์
+          primary_key_id?: string | null
+        }
+      }
+      song_keys: {
+        Row: {
+          id: string
+          key_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key_name?: string
+          created_at?: string
+        }
+      }
+      song_to_keys: {
+        Row: {
+          id: string
+          song_id: string
+          key_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          song_id: string
+          key_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          song_id?: string
+          key_id?: string
+          created_at?: string
         }
       }
       profiles: {
