@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -48,7 +48,6 @@ interface EditSongFormProps {
 export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFormProps): JSX.Element => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false)
-  const [keysWithChords, setKeysWithChords] = useState<Record<string, string[]>>({})
   const { toast } = useToast()
   const lyricsTextareaRef = useRef<HTMLTextAreaElement>(null)
   const allKeys = getAllKeys()
@@ -65,38 +64,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       lyrics: song.lyrics,
     },
   })
-
-  // เมื่อฟอร์มเปิด ให้ตั้งค่า keysWithChords จากข้อมูลเพลง
-  useEffect(() => {
-    if (isOpen && song.chord_keys && song.chord_keys.length > 0) {
-      // สร้าง keysWithChords จาก chord_keys ที่มีอยู่
-      const chordRegex = /\[([A-G][b#]?[^[\]]*)\]/g
-      const matches = song.lyrics.match(chordRegex) || []
-
-      // แยกคอร์ดหลักออกมา (เช่น C จาก Cmaj7, G จาก G7)
-      const rootChords = matches
-        .map((match) => {
-          // ตัดวงเล็บเหลี่ยมออก
-          const chord = match.substring(1, match.length - 1)
-
-          // แยกคอร์ดหลัก
-          const rootMatch = chord.match(/^([A-G][b#]?)/)
-          return rootMatch ? rootMatch[1] : null
-        })
-        .filter(Boolean) as string[]
-
-      // ลบคอร์ดซ้ำ
-      const uniqueChords = [...new Set(rootChords)]
-
-      // สร้าง keysWithChords
-      const keyChordMap: Record<string, string[]> = {}
-      song.chord_keys.forEach((key) => {
-        keyChordMap[key] = uniqueChords
-      })
-
-      setKeysWithChords(keyChordMap)
-    }
-  }, [isOpen, song])
 
   // ในส่วนของการอัปเดตเพลง ให้รักษาค่า showChords และ createdAt
   const onSubmit = async (values: FormValues): Promise<void> => {
@@ -122,7 +89,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
         lyrics: formattedLyrics, // ใช้เนื้อเพลงที่แปลงรูปแบบคอร์ดแล้ว
         show_chords: song.show_chords ?? true, // รักษาค่าเดิม หรือตั้งค่าเริ่มต้นเป็น true
         created_at: song.created_at, // รักษาวันที่เพิ่มเพลงเดิมไว้
-        chord_keys: Object.keys(keysWithChords), // อัปเดตรายการคีย์ที่มีคอร์ด
       }
 
       console.log("Song updated:", updatedSong)
@@ -162,7 +128,6 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
       tags: song.tags || [],
       lyrics: song.lyrics,
     })
-    setKeysWithChords({})
     onClose()
   }
 
@@ -323,7 +288,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                     <FormItem>
                       <FormLabel className="text-blue-900 dark:text-blue-300 flex items-center">
                         <Music className="h-4 w-4 mr-1" />
-                        คีย์เพลงหลัก
+                        คีย์เพลง
                       </FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value || "C"}>
                         <FormControl>
@@ -418,8 +383,7 @@ export const EditSongForm = ({ song, isOpen, onClose, onUpdateSong }: EditSongFo
                       <li>เพิ่มคอร์ดในวงเล็บเหลี่ยม เช่น [C], [G], [Am]</li>
                       <li>วางคอร์ดไว้ก่อนคำที่ต้องการให้เล่นคอร์ดนั้น</li>
                       <li>ระบบจะวิเคราะห์คีย์เพลงจากคอร์ดที่คุณใส่</li>
-                      <li>คุณสามารถเพิ่มคีย์ได้หลายคีย์ และเลือกคีย์หลักที่ต้องการ</li>
-                      <li>คอร์ดจะถูกปรับอัตโนมัติเมื่อเปลี่ยนคีย์ตอนแสดงผล</li>
+                      <li>คุณสามารถเปลี่ยนคีย์ได้ตามต้องการ โดยคอร์ดจะถูกปรับอัตโนมัติเมื่อแสดงผล</li>
                     </ul>
                   </div>
                 </div>
