@@ -256,48 +256,7 @@ export default function SongList({ initialSongs = [] }: Readonly<SongListProps>)
 
       console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
 
-      // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
-      let favorites: Record<string, boolean> = {}
-
-      if (user) {
-        const { data: favoritesData } = await supabase.from("favorites").select("song_id").eq("user_id", user.id)
-
-        if (favoritesData) {
-          favorites = favoritesData.reduce(
-            (acc, fav) => {
-              acc[fav.song_id] = true
-              return acc
-            },
-            {} as Record<string, boolean>,
-          )
-        }
-      }
-
-      // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
-      const songsWithUserInfo = await Promise.all(
-        songsData?.map(async (song) => {
-          if (song.user_id) {
-            const { data: userData } = await supabase
-              .from("profiles")
-              .select("username, display_name")
-              .eq("id", song.user_id)
-              .single()
-
-            return {
-              ...song,
-              is_favorite: favorites[song.id] || false,
-              user_info: userData || null,
-            }
-          }
-          return {
-            ...song,
-            is_favorite: favorites[song.id] || false,
-            user_info: null,
-          }
-        }) || [],
-      )
-
-      setSongs(songsWithUserInfo)
+      setSongs(songsData)
     } catch (error) {
       console.error("Error fetching songs:", error)
       toast({
