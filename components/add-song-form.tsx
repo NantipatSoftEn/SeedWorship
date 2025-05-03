@@ -148,7 +148,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[700px] bg-white dark:bg-gray-800">
+        <DialogContent className="sm:max-w-[700px] bg-white dark:bg-gray-800 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-blue-900 dark:text-blue-300">เพิ่มเพลงใหม่</DialogTitle>
             <Button
@@ -163,7 +163,7 @@ export const AddSongForm = ({ isOpen, onClose, onAddSong }: AddSongFormProps): J
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}

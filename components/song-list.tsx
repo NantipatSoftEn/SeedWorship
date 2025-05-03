@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, JSX } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Search, Filter, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -38,179 +38,7 @@ interface SongListProps {
   initialSongs?: Song[]
 }
 
-// Add these components before the main SongList component
-const SongResults = ({ 
-  songs, 
-  searchQuery, 
-  totalPages, 
-  currentPage, 
-  setCurrentPage, 
-  getPageNumbers, 
-  onUpdateSong, 
-  onDeleteSong, 
-  onToggleChords, 
-  onToggleFavorite 
-}: {
-  songs: Song[],
-  searchQuery: string,
-  totalPages: number,
-  currentPage: number,
-  setCurrentPage: (page: number) => void,
-  getPageNumbers: () => (number | string)[],
-  onUpdateSong: (song: Song) => void,
-  onDeleteSong: (id: string) => void,
-  onToggleChords: (id: string, showChords: boolean) => void,
-  onToggleFavorite: (id: string) => void
-}) => (
-  <>
-    <div className="space-y-4">
-      {songs.map((song) => (
-        <SongCard
-                key={song.id}
-                song={song}
-                searchQuery={searchQuery}
-                onUpdateSong={onUpdateSong}
-                onDeleteSong={onDeleteSong}
-                onToggleChords={onToggleChords}
-              />
-      ))}
-    </div>
-
-    {totalPages > 1 && (
-      <Pagination className="mt-6">
-        <PaginationContent>
-          <PaginationItem>
-            {currentPage === 1 ? (
-              <PaginationPrevious
-                className="opacity-50 cursor-not-allowed pointer-events-none"
-              />
-            ) : (
-              <PaginationPrevious
-                onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-                className=""
-              />
-            )}
-          </PaginationItem>
-
-          {getPageNumbers().map((pageNumber, i) =>
-            pageNumber === "ellipsis" ? (
-              <PaginationItem key={`ellipsis-before-${pageNumber === "ellipsis" && i > 0 ? getPageNumbers()[i-1] : 0}-after-${pageNumber === "ellipsis" && i < getPageNumbers().length - 1 ? getPageNumbers()[i+1] : 0}`}>
-                <PaginationEllipsis />
-              </PaginationItem>
-            ) : (
-              <PaginationItem key={pageNumber}>
-                <PaginationLink
-                  isActive={currentPage === pageNumber}
-                  onClick={() => setCurrentPage(pageNumber as number)}
-                >
-                  {pageNumber}
-                </PaginationLink>
-              </PaginationItem>
-            )
-          )}
-          <PaginationItem>
-            {currentPage === totalPages ? (
-              <PaginationNext
-                className="opacity-50 cursor-not-allowed pointer-events-none"
-              />
-            ) : (
-              <PaginationNext
-                onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))}
-                className=""
-              />
-            )}
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
-    )}
-  </>
-);
-
-const EmptyResults = ({ 
-  searchQuery, 
-  suggestions, 
-  resetFilters, 
-  setSearchQuery, 
-  songRecommendations 
-}: {
-  searchQuery: string,
-  suggestions: string[],
-  resetFilters: () => void,
-  setSearchQuery: (query: string) => void,
-  songRecommendations: Song[]
-}) => (
-  <div className="text-center py-12 bg-card rounded-lg shadow-sm border border-border">
-    <p className="text-muted-foreground mb-4">
-      ไม่พบเพลงที่ตรงกับคำค้นหา &quot;{searchQuery}&quot; ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
-    </p>
-
-    {suggestions.length > 0 && (
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-2">คุณอาจกำลังค้นหา:</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          {suggestions.map((suggestion) => (
-            <Badge
-              key={suggestion}
-              variant="secondary"
-              className="cursor-pointer"
-              onClick={() => setSearchQuery(suggestion)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSearchQuery(suggestion);
-                }
-              }}
-              tabIndex={0}
-              role="button"
-            >
-              {suggestion}
-            </Badge>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {songRecommendations.length > 0 && (
-      <div className="mt-8">
-        <h3 className="text-lg font-medium text-primary mb-4">เพลงที่คุณอาจสนใจ</h3>
-        <div className="space-y-4 max-w-2xl mx-auto">
-          {songRecommendations.map((song) => (
-            <div
-              key={song.id}
-              className="bg-background rounded-lg p-4 border border-border hover:border-primary transition-colors cursor-pointer"
-              onClick={() => setSearchQuery(song.title)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSearchQuery(song.title);
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label={`Suggested song: ${song.title}`}
-            >
-              <h4 className="font-medium text-primary">{song.title}</h4>
-              <p className="text-sm text-muted-foreground">{song.artist}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant="outline">
-                  {song.category === "praise" ? "สรรเสริญ" : song.category === "worship" ? "นมัสการ" : "บทเพลงเปิด"}
-                </Badge>
-                {song.tags && song.tags.length > 0 && <Badge variant="secondary">{song.tags[0]}</Badge>}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    <Button variant="outline" onClick={resetFilters} className="mt-6">
-      <X className="h-4 w-4 mr-2" />
-      ล้างการค้นหา
-    </Button>
-  </div>
-);
-
-export default function SongList({ initialSongs = [] }: Readonly<SongListProps>): JSX.Element {
+export default function SongList({ initialSongs = [] }: SongListProps): JSX.Element {
   const [songs, setSongs] = useState<Song[]>(initialSongs)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -256,7 +84,48 @@ export default function SongList({ initialSongs = [] }: Readonly<SongListProps>)
 
       console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
 
-      setSongs(songsData)
+      // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
+      let favorites: Record<string, boolean> = {}
+
+      if (user) {
+        const { data: favoritesData } = await supabase.from("favorites").select("song_id").eq("user_id", user.id)
+
+        if (favoritesData) {
+          favorites = favoritesData.reduce(
+            (acc, fav) => {
+              acc[fav.song_id] = true
+              return acc
+            },
+            {} as Record<string, boolean>,
+          )
+        }
+      }
+
+      // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
+      const songsWithUserInfo = await Promise.all(
+        songsData?.map(async (song) => {
+          if (song.user_id) {
+            const { data: userData } = await supabase
+              .from("profiles")
+              .select("username, display_name")
+              .eq("id", song.user_id)
+              .single()
+
+            return {
+              ...song,
+              is_favorite: favorites[song.id] || false,
+              user_info: userData || null,
+            }
+          }
+          return {
+            ...song,
+            is_favorite: favorites[song.id] || false,
+            user_info: null,
+          }
+        }) || [],
+      )
+
+      setSongs(songsWithUserInfo)
     } catch (error) {
       console.error("Error fetching songs:", error)
       toast({
@@ -484,34 +353,32 @@ export default function SongList({ initialSongs = [] }: Readonly<SongListProps>)
     }
 
     if (selectedTag !== "all") {
-      result = result.filter((song) => song.tags?.includes(selectedTag as SongTag))
+      result = result.filter((song) => song.tags && song.tags.includes(selectedTag as SongTag))
     }
 
     // เรียงลำดับเพลงตามตัวเลือกการเรียงลำดับ
     result = [...result].sort((a, b) => {
-      let dateA, dateB;
-      
       switch (sortOption) {
         case "newest":
-          dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return dateB - dateA; // เรียงจากใหม่ไปเก่า
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateB - dateA // เรียงจากใหม่ไปเก่า
         case "oldest":
-          dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return dateA - dateB; // เรียงจากเก่าไปใหม่
+          const dateC = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateD = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateC - dateD // เรียงจากเก่าไปใหม่
         case "titleAsc":
-          return a.title.localeCompare(b.title); // เรียงตามชื่อเพลง A-Z
+          return a.title.localeCompare(b.title) // เรียงตามชื่อเพลง A-Z
         case "titleDesc":
-          return b.title.localeCompare(a.title); // เรียงตามชื่อเพลง Z-A
+          return b.title.localeCompare(a.title) // เรียงตามชื่อเพลง Z-A
         case "artistAsc":
-          return a.artist.localeCompare(b.artist); // เรียงตามชื่อศิลปิน A-Z
+          return a.artist.localeCompare(b.artist) // เรียงตามชื่อศิลปิน A-Z
         case "artistDesc":
-          return b.artist.localeCompare(a.artist); // เรียงตามชื่อศิลปิน Z-A
+          return b.artist.localeCompare(a.artist) // เรียงตามชื่อศิลปิน Z-A
         default:
-          dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return dateB - dateA; // เรียงจากใหม่ไปเก่า (ค่าเริ่มต้น)
+          const dateE = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateF = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateF - dateE // เรียงจากใหม่ไปเก่า (ค่าเริ่มต้น)
       }
     })
 
@@ -681,7 +548,6 @@ export default function SongList({ initialSongs = [] }: Readonly<SongListProps>)
       .map((item) => item.song)
   }
 
-  // In the return statement, replace the complex conditional rendering with:
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
@@ -756,31 +622,117 @@ export default function SongList({ initialSongs = [] }: Readonly<SongListProps>)
         <AddSongButton className="w-full" onAddSong={addSong} />
       </div>
 
-      {isLoading && <SongListSkeleton />}
-      
-      {!isLoading && paginatedSongs.length > 0 && (
-        <SongResults
-          songs={paginatedSongs}
-          searchQuery={searchQuery}
-          totalPages={totalPages}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          getPageNumbers={getPageNumbers}
-          onUpdateSong={updateSong}
-          onDeleteSong={deleteSong}
-          onToggleChords={handleToggleChords}
-          onToggleFavorite={handleToggleFavorite}
-        />
-      )}
-      
-      {!isLoading && paginatedSongs.length === 0 && (
-        <EmptyResults
-          searchQuery={searchQuery}
-          suggestions={suggestions}
-          resetFilters={resetFilters}
-          setSearchQuery={setSearchQuery}
-          songRecommendations={getSongRecommendations()}
-        />
+      {isLoading ? (
+        <SongListSkeleton />
+      ) : paginatedSongs.length > 0 ? (
+        <>
+          <div className="space-y-4">
+            {paginatedSongs.map((song) => (
+              <SongCard
+                key={song.id}
+                song={song}
+                searchQuery={searchQuery}
+                onUpdateSong={updateSong}
+                onDeleteSong={deleteSong}
+                onToggleChords={handleToggleChords}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <Pagination className="mt-6">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
+                  />
+                </PaginationItem>
+
+                {getPageNumbers().map((pageNumber, index) =>
+                  pageNumber === "ellipsis" ? (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={pageNumber}>
+                      <PaginationLink
+                        isActive={currentPage === pageNumber}
+                        onClick={() => setCurrentPage(pageNumber as number)}
+                      >
+                        {pageNumber}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className={currentPage === totalPages ? "opacity-50 cursor-not-allowed" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </>
+      ) : (
+        <div className="text-center py-12 bg-card rounded-lg shadow-sm border border-border">
+          <p className="text-muted-foreground mb-4">
+            ไม่พบเพลงที่ตรงกับคำค้นหา &quot;{searchQuery}&quot; ในชื่อเพลง, ศิลปิน หรือเนื้อเพลง
+          </p>
+
+          {suggestions.length > 0 && (
+            <div className="mb-6">
+              <p className="text-sm text-muted-foreground mb-2">คุณอาจกำลังค้นหา:</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestions.map((suggestion) => (
+                  <Badge
+                    key={suggestion}
+                    variant="secondary"
+                    className="cursor-pointer"
+                    onClick={() => setSearchQuery(suggestion)}
+                  >
+                    {suggestion}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* แสดงเพลงแนะนำ */}
+          {getSongRecommendations().length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-medium text-primary mb-4">เพลงที่คุณอาจสนใจ</h3>
+              <div className="space-y-4 max-w-2xl mx-auto">
+                {getSongRecommendations().map((song) => (
+                  <div
+                    key={song.id}
+                    className="bg-background rounded-lg p-4 border border-border hover:border-primary transition-colors cursor-pointer"
+                    onClick={() => setSearchQuery(song.title)}
+                  >
+                    <h4 className="font-medium text-primary">{song.title}</h4>
+                    <p className="text-sm text-muted-foreground">{song.artist}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline">
+                        {song.category === "praise" ? "สรรเสริญ" : song.category === "worship" ? "นมัสการ" : "บทเพลงเปิด"}
+                      </Badge>
+                      {song.tags && song.tags.length > 0 && <Badge variant="secondary">{song.tags[0]}</Badge>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Button variant="outline" onClick={resetFilters} className="mt-6">
+            <X className="h-4 w-4 mr-2" />
+            ล้างการค้นหา
+          </Button>
+        </div>
       )}
     </div>
   )
