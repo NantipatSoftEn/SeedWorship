@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, JSX } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Search, Filter, X, ArrowDownAZ, ArrowUpZA, Calendar } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -58,7 +58,8 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
   const [sortOption, setSortOption] = useState<string>("newest")
 
   // แก้ไขฟังก์ชัน fetchSongs เพื่อดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
-  const fetchSongs = async () => {
+  const fetchSongs = async (text:string) => {
+    console.log(`Fetching songs...${text}`)
     try {
       setIsLoading(true)
 
@@ -77,36 +78,39 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
       // ดึงข้อมูลเพลงทั้งหมด
       const { data: songsData, error } = await supabase
         .from("songs")
-        .select("*")
-        .order("created_at", { ascending: false })
+        .select()
+        // .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("Error fetching songs:", error)
+        throw error
+      }
 
       console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
 
       // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
-      const songsWithUserInfo = await Promise.all(
-        songsData?.map(async (song) => {
-          if (song.user_id) {
-            const { data: userData } = await supabase
-              .from("profiles")
-              .select("username, display_name")
-              .eq("id", song.user_id)
-              .single()
+      // const songsWithUserInfo = await Promise.all(
+      //   songsData?.map(async (song) => {
+      //     if (song.user_id) {
+      //       const { data: userData } = await supabase
+      //         .from("profiles")
+      //         .select("username, display_name")
+      //         .eq("id", song.user_id)
+      //         .single()
 
-            return {
-              ...song,
-              user_info: userData || null,
-            }
-          }
-          return {
-            ...song,
-            user_info: null,
-          }
-        }) || [],
-      )
+      //       return {
+      //         ...song,
+      //         user_info: userData || null,
+      //       }
+      //     }
+      //     return {
+      //       ...song,
+      //       user_info: null,
+      //     }
+      //   }) || [],
+      // )
 
-      setSongs(songsWithUserInfo)
+      setSongs(songsData)
     } catch (error) {
       console.error("Error fetching songs:", error)
       toast({
@@ -120,9 +124,9 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
   }
 
   // เมื่อ isDevMode เปลี่ยน ให้ดึงข้อมูลใหม่
-  useEffect(() => {
-    fetchSongs()
-  }, [isDevMode])
+  // useEffect(() => {
+  //   fetchSongs("isDevMode changed")
+  // }, [isDevMode])
 
   useEffect(() => {
     // ถ้ามี initialSongs ให้ใช้ initialSongs เป็นค่าเริ่มต้น
@@ -131,7 +135,7 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
       setIsLoading(false)
     } else {
       // ถ้าไม่มี initialSongs หรืออยู่ในโหมด Dev Mode ให้ดึงข้อมูลใหม่
-      fetchSongs()
+      fetchSongs("initialSongs changed")
     }
   }, [initialSongs])
 
@@ -551,7 +555,7 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
                 <PaginationItem>
                   <PaginationPrevious
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
+                    // disabled={currentPage === 1}
                     className={currentPage === 1 ? "opacity-50 cursor-not-allowed" : ""}
                   />
                 </PaginationItem>
@@ -576,7 +580,7 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
                 <PaginationItem>
                   <PaginationNext
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
+                    // disabled={currentPage === totalPages}
                     className={currentPage === totalPages ? "opacity-50 cursor-not-allowed" : ""}
                   />
                 </PaginationItem>
