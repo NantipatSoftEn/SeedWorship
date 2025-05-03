@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, JSX } from "react"
 import { ChevronDown, ChevronUp, Edit2, Calendar, Globe, Tag, Music } from "lucide-react"
 import { Button } from "@/components/shadcn/button"
 import { Badge } from "@/components/shadcn/badge"
@@ -31,10 +31,10 @@ const SongCard = ({ song, searchQuery, onUpdateSong, onDeleteSong, onToggleChord
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const [isEditFormOpen, setIsEditFormOpen] = useState<boolean>(false)
   const [fontSize, setFontSize] = useState<string>("medium")
-  const [currentKey, setCurrentKey] = useState<string>(song.key || "C")
+  const [currentKey, setCurrentKey] = useState<string>(song.key ?? "C")
   const { isAdmin } = useAuth()
   const showChords = song.show_chords ?? true // ค่าเริ่มต้นคือแสดงคอร์ด
-  const originalKey = song.key || "C" // คีย์เดิมของเพลง
+  const originalKey = song.key ?? "C" // คีย์เดิมของเพลง
 
   // เพิ่ม state สำหรับเก็บข้อมูลคีย์
   const [songKeys, setSongKeys] = useState<SongKey[]>([])
