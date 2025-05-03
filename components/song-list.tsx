@@ -84,23 +84,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
 
       console.log("Fetched songs:", songsData) // เพิ่มบรรทัดนี้เพื่อตรวจสอบข้อมูล
 
-      // ถ้ามีผู้ใช้ที่ล็อกอินอยู่ ให้ตรวจสอบว่าเพลงไหนเป็นเพลงโปรดของผู้ใช้
-      let favorites: Record<string, boolean> = {}
-
-      if (user) {
-        const { data: favoritesData } = await supabase.from("favorites").select("song_id").eq("user_id", user.id)
-
-        if (favoritesData) {
-          favorites = favoritesData.reduce(
-            (acc, fav) => {
-              acc[fav.song_id] = true
-              return acc
-            },
-            {} as Record<string, boolean>,
-          )
-        }
-      }
-
       // ดึงข้อมูลผู้ใช้สำหรับแต่ละเพลง
       const songsWithUserInfo = await Promise.all(
         songsData?.map(async (song) => {
@@ -113,13 +96,11 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
 
             return {
               ...song,
-              is_favorite: favorites[song.id] || false,
               user_info: userData || null,
             }
           }
           return {
             ...song,
-            is_favorite: favorites[song.id] || false,
             user_info: null,
           }
         }) || [],
@@ -220,81 +201,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถอัปเดตการแสดง/ซ่อนคอร์ดได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Function to toggle favorite
-  const handleToggleFavorite = async (songId: string) => {
-    try {
-      // ถ้าอยู่ในโหมด Dev Mode ให้อัปเดตเฉพาะใน state
-      if (isDevMode) {
-        setSongs((prevSongs) =>
-          prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: !song.is_favorite } : song)),
-        )
-        toast({
-          title: "อัปเดตเพลงโปรดสำเร็จ (Dev Mode)",
-          description: "อัปเดตเพลงโปรดเรียบร้อยแล้ว (ข้อมูลจำลอง)",
-        })
-        return
-      }
-
-      // ดึงข้อมูลผู้ใช้ปัจจุบัน
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast({
-          title: "กรุณาเข้าสู่ระบบ",
-          description: "กรุณาเข้าสู่ระบบก่อนเพิ่ม/ลบเพลงโปรด",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // ตรวจสอบว่าเพลงนี้เป็นเพลงโปรดของผู้ใช้หรือไม่
-      const { data: favorite } = await supabase
-        .from("favorites")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("song_id", songId)
-        .single()
-
-      if (favorite) {
-        // ถ้าเป็นเพลงโปรดอยู่แล้ว ให้ลบออก
-        const { error } = await supabase.from("favorites").delete().eq("id", favorite.id)
-
-        if (error) throw error
-
-        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: false } : song)))
-
-        toast({
-          title: "ลบออกจากเพลงโปรดแล้ว",
-          description: "ลบเพลงออกจากรายการเพลงโปรดเรียบร้อยแล้ว",
-        })
-      } else {
-        // ถ้ายังไม่เป็นเพลงโปรด ให้เพิ่มเข้าไป
-        const { error } = await supabase.from("favorites").insert({
-          user_id: user.id,
-          song_id: songId,
-        })
-
-        if (error) throw error
-
-        setSongs((prevSongs) => prevSongs.map((song) => (song.id === songId ? { ...song, is_favorite: true } : song)))
-
-        toast({
-          title: "เพิ่มเข้าเพลงโปรดแล้ว",
-          description: "เพิ่มเพลงเข้ารายการเพลงโปรดเรียบร้อยแล้ว",
-        })
-      }
-    } catch (error) {
-      console.error("Error toggling favorite:", error)
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถเพิ่ม/ลบเพลงโปรดได้ กรุณาลองใหม่อีกครั้ง",
         variant: "destructive",
       })
     }
@@ -635,7 +541,6 @@ export default function SongList({ initialSongs = [] }: SongListProps): JSX.Elem
                 onUpdateSong={updateSong}
                 onDeleteSong={deleteSong}
                 onToggleChords={handleToggleChords}
-                onToggleFavorite={handleToggleFavorite}
               />
             ))}
           </div>

@@ -23,7 +23,6 @@ export interface Song {
   user_id?: string | null
   created_at: string
   updated_at?: string
-  is_favorite?: boolean
   key?: string // คีย์หลักของเพลง
   chord_keys?: string[] // รายการคีย์ทั้งหมดที่มีคอร์ด
 }
