@@ -369,13 +369,19 @@ export const EditSongForm = ({
                                         </div>
                                         <FormControl>
                                             <Textarea
-                                                ref={lyricsTextareaRef}
                                                 placeholder={
                                                     selectedLanguage === "english"
                                                         ? "Enter lyrics here..."
                                                         : "ระบุเนื้อเพลง"
                                                 }
                                                 {...field}
+                                                ref={(e) => {
+                                                    // Merge the refs
+                                                    lyricsTextareaRef.current = e
+                                                    if (typeof field.ref === "function") {
+                                                        field.ref(e)
+                                                    }
+                                                }}
                                                 className="min-h-[150px] border-blue-100 dark:border-blue-800 focus-visible:ring-blue-200 dark:focus-visible:ring-blue-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-sarabun"
                                             />
                                         </FormControl>
