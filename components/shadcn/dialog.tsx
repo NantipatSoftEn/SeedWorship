@@ -61,7 +61,7 @@ interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
     className?: string
 }
 
-const DialogHeader = ({ className, ...props }: DialogHeaderProps): JSX.Element => (
+const DialogHeader = ({ className, ...props }: DialogHeaderProps): React.JSX.Element => (
     <div
         className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}
         {...props}
@@ -73,7 +73,7 @@ interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {
     className?: string
 }
 
-const DialogFooter = ({ className, ...props }: DialogFooterProps): JSX.Element => (
+const DialogFooter = ({ className, ...props }: DialogFooterProps): React.JSX.Element => (
     <div
         className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
         {...props}
